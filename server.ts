@@ -299,6 +299,17 @@ const SEED_COMMUNITY_PHOTOS = [
   }
 ];
 
+interface DatabaseSchema {
+  excursions: any[];
+  bookings: any[];
+  reviews: any[];
+  newsletter_signups: any[];
+  oracle_logs: any[];
+  community_photos?: any[];
+  ancient_sites?: any[];
+  users?: any[];
+}
+
 const DB_FILE_PATH = path.join(process.cwd(), "kemet_db.json");
 const DB_FILE_FALLBACK_PATH = "/tmp/kemet_db.json";
 let activeDbPath = DB_FILE_PATH;
@@ -766,6 +777,76 @@ async function startServer() {
   });
 
   // ==========================================
+  // USER AUTHENTICATION ENDPOINTS
+  // ==========================================
+  app.post("/api/auth/register", publicWriteLimiter, (req, res) => {
+    try {
+      const { name, email, password, phone, whatsapp, hotelName, roomNumber } = req.body;
+      if (!name || !email || !password) {
+        return res.status(400).json({ error: "Name, email and password are required to register a royal account." });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Please enter a valid email address." });
+      }
+
+      const db = loadDb();
+      if (!db.users) db.users = [];
+
+      const existing = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase());
+      if (existing) {
+        return res.status(400).json({ error: "An account with this email already exists. Please log in instead." });
+      }
+
+      const newUser = {
+        id: `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        name: sanitizeString(name, 100),
+        email: sanitizeString(email, 100).toLowerCase(),
+        password: sanitizeString(password, 100),
+        phone: sanitizeString(phone, 40),
+        whatsapp: sanitizeString(whatsapp, 40),
+        hotelName: sanitizeString(hotelName, 120),
+        roomNumber: sanitizeString(roomNumber, 40),
+        role: "traveler",
+        createdAt: new Date().toISOString()
+      };
+
+      db.users.push(newUser);
+      saveDb(db);
+
+      const { password: _, ...userSafe } = newUser;
+      res.json({ success: true, user: userSafe });
+    } catch (err: any) {
+      console.error("Auth register error:", err);
+      res.status(500).json({ error: "Failed to register account." });
+    }
+  });
+
+  app.post("/api/auth/login", publicWriteLimiter, (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required." });
+      }
+
+      const db = loadDb();
+      if (!db.users) db.users = [];
+
+      const user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password. Please verify your credentials." });
+      }
+
+      const { password: _, ...userSafe } = user;
+      res.json({ success: true, user: userSafe });
+    } catch (err: any) {
+      console.error("Auth login error:", err);
+      res.status(500).json({ error: "Failed to authenticate." });
+    }
+  });
+
+  // ==========================================
   // CARAVAN BOOKINGS ENDPOINTS
   // ==========================================
   app.get("/api/bookings", adminAuth, (req, res) => {
@@ -775,7 +856,23 @@ async function startServer() {
 
   app.post("/api/bookings", publicWriteLimiter, async (req, res) => {
     try {
-      const { excursionId, excursionTitle, travelerName, travelerEmail, date, numberOfGuests, totalCost, specialRequests } = req.body;
+      const {
+        excursionId,
+        excursionTitle,
+        travelerName,
+        travelerEmail,
+        phoneNumber,
+        whatsappNumber,
+        hotelName,
+        roomNumber,
+        pickupTime,
+        date,
+        numberOfGuests,
+        totalCost,
+        promoCodeUsed,
+        discountAmount,
+        specialRequests
+      } = req.body;
       const accessToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || req.body.accessToken;
       const db = loadDb();
 
@@ -794,9 +891,16 @@ async function startServer() {
         excursionTitle: sanitizeString(excursionTitle, 100),
         travelerName: sanitizeString(travelerName, 100),
         travelerEmail: sanitizeString(travelerEmail, 100),
+        phoneNumber: sanitizeString(phoneNumber, 40),
+        whatsappNumber: sanitizeString(whatsappNumber || phoneNumber, 40),
+        hotelName: sanitizeString(hotelName, 120),
+        roomNumber: sanitizeString(roomNumber, 40),
+        pickupTime: sanitizeString(pickupTime, 40),
         date: sanitizeString(date, 30),
         numberOfGuests: guestsCount,
         totalCost: costAmount,
+        promoCodeUsed: sanitizeString(promoCodeUsed, 40),
+        discountAmount: Number(discountAmount) || 0,
         specialRequests: sanitizeString(specialRequests, 500),
         status: "Pending Oracle Approval",
         createdAt: new Date().toISOString()

@@ -1,3 +1,15 @@
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  whatsapp?: string;
+  hotelName?: string;
+  roomNumber?: string;
+  role?: 'traveler' | 'admin';
+  createdAt?: string;
+}
+
 export interface Excursion {
   id: string;
   title: string;
@@ -20,9 +32,16 @@ export interface Booking {
   excursionTitle: string;
   travelerName: string;
   travelerEmail: string;
+  phoneNumber?: string;
+  whatsappNumber?: string;
+  hotelName?: string;
+  roomNumber?: string;
+  pickupTime?: string;
   date: string;
   numberOfGuests: number;
   totalCost: number;
+  promoCodeUsed?: string;
+  discountAmount?: number;
   specialRequests?: string;
   status: 'Pending Oracle Approval' | 'Confirmed by High Priest' | 'Completed';
   checkedIn?: boolean;

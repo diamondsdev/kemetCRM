@@ -355,22 +355,30 @@ export default function BookingManager({ bookings, excursions, onCancelBooking, 
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs text-stone-400 pt-2 border-t border-stone-800/60 font-sans">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs text-stone-400 pt-2 border-t border-stone-800/60 font-sans">
                       <div>
                         <span className="text-stone-500 block text-[10px] uppercase font-mono tracking-wider">{language === 'de' ? 'Name des Reisenden:' : language === 'pl' ? 'Imię podróżnego:' : 'Traveler Name:'}</span>
-                        <span className="text-stone-200">{booking.travelerName}</span>
+                        <span className="text-stone-200 font-medium">{booking.travelerName}</span>
                       </div>
                       <div>
                         <span className="text-stone-500 block text-[10px] uppercase font-mono tracking-wider">{language === 'de' ? 'Reisedatum:' : language === 'pl' ? 'Data podróży:' : 'Travel Date:'}</span>
-                        <span className="text-stone-200">{booking.date}</span>
+                        <span className="text-stone-200 font-medium">{booking.date}</span>
                       </div>
                       <div>
                         <span className="text-stone-500 block text-[10px] uppercase font-mono tracking-wider">{language === 'de' ? 'Gruppengröße:' : language === 'pl' ? 'Rozmiar grupy:' : 'Group Size:'}</span>
-                        <span className="text-stone-200">{booking.numberOfGuests} {booking.numberOfGuests === 1 ? (language === 'de' ? 'Person' : language === 'pl' ? 'Osoba' : 'Person') : (language === 'de' ? 'Personen' : language === 'pl' ? 'Osoby/osób' : 'People')}</span>
+                        <span className="text-stone-200 font-medium">{booking.numberOfGuests} {booking.numberOfGuests === 1 ? 'Person' : 'People'}</span>
+                      </div>
+                      <div>
+                        <span className="text-stone-500 block text-[10px] uppercase font-mono tracking-wider">Hotel & Room:</span>
+                        <span className="text-stone-200 font-medium">{booking.hotelName || "Not specified"} {booking.roomNumber ? `(Room ${booking.roomNumber})` : ""}</span>
+                      </div>
+                      <div>
+                        <span className="text-stone-500 block text-[10px] uppercase font-mono tracking-wider">Pickup & Phone:</span>
+                        <span className="text-stone-200 font-medium">{booking.pickupTime || "07:30 AM"} • {booking.phoneNumber || "N/A"}</span>
                       </div>
                       <div>
                         <span className="text-stone-500 block text-[10px] uppercase font-mono tracking-wider">{language === 'de' ? 'Gesamtpreis:' : language === 'pl' ? 'Cena całkowita:' : 'Total Price:'}</span>
-                        <span className="text-[#d4af37] font-mono font-semibold">${booking.totalCost}</span>
+                        <span className="text-[#d4af37] font-mono font-bold">${booking.totalCost} {booking.promoCodeUsed ? `(${booking.promoCodeUsed} - Saved $${booking.discountAmount || 0})` : ""}</span>
                       </div>
                     </div>
 

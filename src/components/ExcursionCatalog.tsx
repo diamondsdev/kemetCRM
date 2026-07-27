@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Star, ShieldAlert, CheckCircle, Clock, MapPin, Sparkles, Filter, ChevronRight, X, User, Mail, Calendar, HelpCircle, MessageSquare, Send, ThumbsUp, PenTool, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Star, ShieldAlert, CheckCircle, Clock, MapPin, Sparkles, Filter, ChevronRight, X, User, Mail, Calendar, HelpCircle, MessageSquare, Send, ThumbsUp, PenTool, FileSpreadsheet, RefreshCw, Phone, Building } from 'lucide-react';
 import { Excursion, Booking } from '../types';
 import { useLanguage } from './LanguageContext';
 import ReviewSystem from './ReviewSystem';
@@ -551,9 +551,10 @@ const INITIAL_INLINE_REVIEWS = [
 interface CatalogProps {
   onAddBooking: (booking: Booking) => void;
   excursions?: Excursion[];
+  onRequestAuth?: (reason: string) => void;
 }
 
-export default function ExcursionCatalog({ onAddBooking, excursions }: CatalogProps) {
+export default function ExcursionCatalog({ onAddBooking, excursions, onRequestAuth }: CatalogProps) {
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<'all' | 'diving' | 'safari' | 'history' | 'boat' | 'speedboat'>('all');
   const [selectedExcursion, setSelectedExcursion] = useState<Excursion | null>(null);
@@ -627,10 +628,72 @@ export default function ExcursionCatalog({ onAddBooking, excursions }: CatalogPr
   // Booking Form State
   const [travelerName, setTravelerName] = useState<string>("");
   const [travelerEmail, setTravelerEmail] = useState<string>("");
+  const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const [whatsappNumber, setWhatsappNumber] = useState<string>("");
+  const [sameWhatsapp, setSameWhatsapp] = useState<boolean>(true);
+  const [hotelName, setHotelName] = useState<string>("");
+  const [roomNumber, setRoomNumber] = useState<string>("");
+  const [pickupTime, setPickupTime] = useState<string>("07:30 AM");
   const [bookingDate, setBookingDate] = useState<string>("");
   const [guests, setGuests] = useState<number>(2);
   const [requests, setRequests] = useState<string>("");
   const [successMsg, setSuccessMsg] = useState<boolean>(false);
+
+  // Promo Code State
+  const [promoCodeInput, setPromoCodeInput] = useState<string>("");
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountPct: number } | null>(null);
+  const [promoError, setPromoError] = useState<string>("");
+
+  // Pre-fill user details when booking modal opens or user logs in
+  useEffect(() => {
+    const savedUserStr = localStorage.getItem('kemet_user');
+    if (savedUserStr) {
+      try {
+        const u = JSON.parse(savedUserStr);
+        if (u.name && !travelerName) setTravelerName(u.name);
+        if (u.email && !travelerEmail) setTravelerEmail(u.email);
+        if (u.phone && !phoneNumber) setPhoneNumber(u.phone);
+        if (u.whatsapp && !whatsappNumber) setWhatsappNumber(u.whatsapp);
+        if (u.hotelName && !hotelName) setHotelName(u.hotelName);
+        if (u.roomNumber && !roomNumber) setRoomNumber(u.roomNumber);
+      } catch (e) {}
+    }
+  }, [isBookingOpen]);
+
+  // Handle Promo Code Application (Requires User Registration / Login)
+  const handleApplyPromoCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPromoError("");
+
+    const savedUserStr = localStorage.getItem('kemet_user');
+    if (!savedUserStr) {
+      if (onRequestAuth) {
+        onRequestAuth("Registration is required to apply promotional discount codes and claim voucher rewards.");
+      } else {
+        alert("Registration is required to apply promotional discount codes.");
+      }
+      return;
+    }
+
+    const code = promoCodeInput.trim().toUpperCase();
+    if (!code) return;
+
+    const promoRates: Record<string, number> = {
+      'SOLSTICERA15': 15,
+      'FLOODHAPI20': 20,
+      'OSIRISMYSTERY10': 10,
+      'REBIRTHSHEMU15': 15,
+      'PHARAOH25': 25,
+      'MAS20': 20
+    };
+
+    if (promoRates[code]) {
+      setAppliedPromo({ code, discountPct: promoRates[code] });
+      setPromoError("");
+    } else {
+      setPromoError("Invalid promotional scroll code. Try SOLSTICERA15, PHARAOH25, or FLOODHAPI20.");
+    }
+  };
 
   // Compare Excursions State
   const [isComparisonMode, setIsComparisonMode] = useState<boolean>(false);
@@ -983,7 +1046,11 @@ export default function ExcursionCatalog({ onAddBooking, excursions }: CatalogPr
     e.preventDefault();
     if (!travelerName || !travelerEmail || !bookingDate || !selectedExcursion) return;
 
-    const totalCost = selectedExcursion.price * guests;
+    const baseCost = selectedExcursion.price * guests;
+    const discountPct = appliedPromo ? appliedPromo.discountPct : 0;
+    const discountAmount = Math.round((baseCost * discountPct) / 100);
+    const totalCost = baseCost - discountAmount;
+    const activeWhatsapp = sameWhatsapp ? phoneNumber : (whatsappNumber || phoneNumber);
 
     const newBooking: Booking = {
       id: `book-${Date.now()}`,
@@ -991,9 +1058,16 @@ export default function ExcursionCatalog({ onAddBooking, excursions }: CatalogPr
       excursionTitle: selectedExcursion.title,
       travelerName,
       travelerEmail,
+      phoneNumber,
+      whatsappNumber: activeWhatsapp,
+      hotelName,
+      roomNumber,
+      pickupTime,
       date: bookingDate,
       numberOfGuests: guests,
       totalCost,
+      promoCodeUsed: appliedPromo ? appliedPromo.code : undefined,
+      discountAmount,
       specialRequests: requests,
       status: 'Pending Oracle Approval',
       createdAt: new Date().toISOString()
@@ -1002,17 +1076,22 @@ export default function ExcursionCatalog({ onAddBooking, excursions }: CatalogPr
     onAddBooking(newBooking);
     setSuccessMsg(true);
 
-    // Formulate a beautiful WhatsApp detail message
-    const message = `𓂀 Kemet Tours - Powered by Mas international Agency - EXPEDITION BOOKING 𓂀
+    // Formulate a detailed WhatsApp message
+    const message = `𓂀 Kemet Tours - Powered by Mas International Agency - EXPEDITION BOOKING 𓂀
 
 Greetings Scribe! I have inscribed a new caravan passage:
 
 𓋹 Expedition: ${selectedExcursion.title}
 𓀚 Traveler Name: ${travelerName}
 ✉ Messenger Email: ${travelerEmail}
+📱 Phone Number: ${phoneNumber || "N/A"}
+💬 WhatsApp Number: ${activeWhatsapp || "N/A"}
+🏨 Hotel Name: ${hotelName || "To be provided"} (Room: ${roomNumber || "N/A"})
+⏰ Preferred Pickup Time: ${pickupTime || "07:30 AM"}
 📅 Departure Date: ${bookingDate}
 👥 Caravan Size: ${guests} Nobles
-💰 Total Tribute: $${totalCost} Gold Coins
+🏷 Promo Code: ${appliedPromo ? `${appliedPromo.code} (${appliedPromo.discountPct}% OFF - Saved $${discountAmount})` : "None"}
+💰 Total Tribute: $${totalCost} Gold Coins ${appliedPromo ? `(Discounted from $${baseCost})` : ""}
 ✍ Special Requests: ${requests || "None"}
 
 Please seal my booking with the High Priest approval!`;
@@ -1026,11 +1105,17 @@ Please seal my booking with the High Priest approval!`;
       // Reset form
       setTravelerName("");
       setTravelerEmail("");
+      setPhoneNumber("");
+      setWhatsappNumber("");
+      setHotelName("");
+      setRoomNumber("");
       setBookingDate("");
       setGuests(2);
       setRequests("");
+      setPromoCodeInput("");
+      setAppliedPromo(null);
 
-      // Redirect the traveler to the WhatsApp Chat
+      // Redirect the traveler to WhatsApp Chat
       window.open(whatsappUrl, '_blank') || (window.location.href = whatsappUrl);
     }, 2000);
   };
@@ -1914,14 +1999,14 @@ Please seal my booking with the High Priest approval!`;
                       {/* Name */}
                       <div className="space-y-1">
                         <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-[#d4af37]" /> {language === 'de' ? 'Name des Reisenden' : language === 'pl' ? 'Imię i nazwisko podróżnika' : 'Traveler Name'}
+                          <User className="w-3.5 h-3.5 text-[#d4af37]" /> {language === 'de' ? 'Name des Reisenden' : language === 'pl' ? 'Imię i nazwisko' : 'Traveler Name'} *
                         </label>
                         <input
                           type="text"
                           required
                           value={travelerName}
                           onChange={(e) => setTravelerName(e.target.value)}
-                          placeholder={language === 'de' ? "Ihr Name (z.B. Ramses Schmidt)" : language === 'pl' ? "Twoje imię i nazwisko (np. Jan Kowalski)" : "Your Name (e.g. Ramses Smith)"}
+                          placeholder="Queen Nefertari / Ramses Smith"
                           className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-lg p-2.5 text-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-[#d4af37]"
                           id="booking-name"
                         />
@@ -1930,23 +2015,118 @@ Please seal my booking with the High Priest approval!`;
                       {/* Email */}
                       <div className="space-y-1">
                         <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1.5">
-                          <Mail className="w-3.5 h-3.5 text-[#d4af37]" /> {language === 'de' ? 'Messenger-E-Mail' : language === 'pl' ? 'Adres e-mail' : 'Messenger Email'}
+                          <Mail className="w-3.5 h-3.5 text-[#d4af37]" /> Email Address *
                         </label>
                         <input
                           type="email"
                           required
                           value={travelerEmail}
                           onChange={(e) => setTravelerEmail(e.target.value)}
-                          placeholder={language === 'de' ? "ihre.email@domain.de" : language === 'pl' ? "twoj.email@domena.pl" : "your.messenger@domain.com"}
+                          placeholder="your.email@domain.com"
                           className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-lg p-2.5 text-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-[#d4af37]"
                           id="booking-email"
                         />
                       </div>
 
+                      {/* Phone Number */}
+                      <div className="space-y-1">
+                        <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-[#d4af37]" /> Phone Number *
+                        </label>
+                        <input
+                          type="tel"
+                          required
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="+20 120 218 1834"
+                          className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-lg p-2.5 text-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-[#d4af37]"
+                          id="booking-phone"
+                        />
+                      </div>
+
+                      {/* WhatsApp Number */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp Number
+                          </label>
+                          <label className="text-[10px] text-stone-400 flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={sameWhatsapp}
+                              onChange={(e) => setSameWhatsapp(e.target.checked)}
+                              className="accent-[#d4af37]"
+                            />
+                            Same as phone
+                          </label>
+                        </div>
+                        {!sameWhatsapp && (
+                          <input
+                            type="tel"
+                            value={whatsappNumber}
+                            onChange={(e) => setWhatsappNumber(e.target.value)}
+                            placeholder="+20 120 218 1834"
+                            className="w-full bg-[#1c1611] border border-emerald-500/40 rounded-lg p-2.5 text-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                            id="booking-whatsapp"
+                          />
+                        )}
+                      </div>
+
+                      {/* Hotel Name */}
+                      <div className="space-y-1">
+                        <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-[#d4af37]" /> Hotel Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={hotelName}
+                          onChange={(e) => setHotelName(e.target.value)}
+                          placeholder="e.g. Steigenberger Alcazar / Sunrise Resort"
+                          className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-lg p-2.5 text-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-[#d4af37]"
+                          id="booking-hotel"
+                        />
+                      </div>
+
+                      {/* Room Number & Pickup Time */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1">
+                            <Building className="w-3 h-3 text-[#d4af37]" /> Room # *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={roomNumber}
+                            onChange={(e) => setRoomNumber(e.target.value)}
+                            placeholder="e.g. 402"
+                            className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-lg p-2.5 text-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-[#d4af37]"
+                            id="booking-room"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-[#d4af37]" /> Pickup Time
+                          </label>
+                          <select
+                            value={pickupTime}
+                            onChange={(e) => setPickupTime(e.target.value)}
+                            className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-lg p-2.5 text-stone-200 text-xs focus:outline-none focus:ring-1 focus:ring-[#d4af37]"
+                            id="booking-time"
+                          >
+                            <option value="05:30 AM">05:30 AM (Early Sunrise)</option>
+                            <option value="07:30 AM">07:30 AM (Standard Morning)</option>
+                            <option value="09:00 AM">09:00 AM (Late Morning)</option>
+                            <option value="01:30 PM">01:30 PM (Afternoon Desert)</option>
+                            <option value="04:00 PM">04:00 PM (Sunset Cruise)</option>
+                          </select>
+                        </div>
+                      </div>
+
                       {/* Date */}
                       <div className="space-y-1">
                         <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-[#d4af37]" /> {language === 'de' ? 'Abreisedatum' : language === 'pl' ? 'Data wyjazdu' : 'Departure Date'}
+                          <Calendar className="w-3.5 h-3.5 text-[#d4af37]" /> {language === 'de' ? 'Abreisedatum' : language === 'pl' ? 'Data wyjazdu' : 'Departure Date'} *
                         </label>
                         <input
                           type="date"
@@ -1961,12 +2141,12 @@ Please seal my booking with the High Priest approval!`;
                       {/* Guests */}
                       <div className="space-y-1">
                         <label className="text-stone-300 text-xs font-mono uppercase tracking-widest flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-[#d4af37]" /> {language === 'de' ? 'Größe der Karawane (Gäste)' : language === 'pl' ? 'Wielkość karawany (liczba gości)' : 'Size of Caravan (Guests)'}
+                          <User className="w-3.5 h-3.5 text-[#d4af37]" /> {language === 'de' ? 'Größe der Karawane (Gäste)' : language === 'pl' ? 'Wielkość karawany (liczba gości)' : 'Size of Caravan (Guests)'} *
                         </label>
                         <input
                           type="number"
                           min={1}
-                          max={15}
+                          max={25}
                           required
                           value={guests}
                           onChange={(e) => setGuests(Number(e.target.value))}
@@ -1974,6 +2154,39 @@ Please seal my booking with the High Priest approval!`;
                           id="booking-guests"
                         />
                       </div>
+                    </div>
+
+                    {/* Promo Code Input */}
+                    <div className="bg-[#18120d] border border-[#d4af37]/30 rounded-xl p-3 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono uppercase text-[#d4af37] tracking-widest flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" /> Promocode Scroll (Requires Registration)
+                        </span>
+                        {appliedPromo && (
+                          <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono">
+                            ✓ {appliedPromo.code} ({appliedPromo.discountPct}% OFF)
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={promoCodeInput}
+                          onChange={(e) => setPromoCodeInput(e.target.value)}
+                          placeholder="e.g. SOLSTICERA15 or PHARAOH25"
+                          className="flex-1 bg-[#0c0907] border border-[#d4af37]/30 rounded-lg px-3 py-1.5 text-stone-200 text-xs uppercase font-mono focus:outline-none focus:border-[#d4af37]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyPromoCode}
+                          className="bg-[#d4af37]/20 hover:bg-[#d4af37]/30 border border-[#d4af37] text-[#d4af37] px-4 py-1.5 rounded-lg text-xs font-serif uppercase tracking-wider font-bold transition-all cursor-pointer"
+                        >
+                          Apply Code
+                        </button>
+                      </div>
+                      {promoError && (
+                        <p className="text-[10px] text-red-400 font-mono">{promoError}</p>
+                      )}
                     </div>
 
                     {/* Special Requests */}
@@ -1992,9 +2205,23 @@ Please seal my booking with the High Priest approval!`;
                     </div>
 
                     {/* Price calculation summary */}
-                    <div className="bg-[#241a12] border border-[#d4af37]/20 rounded-xl p-4 flex justify-between items-center text-xs">
-                      <span className="text-stone-400 font-mono uppercase">{language === 'de' ? 'Karawanenpassage-Kosten:' : language === 'pl' ? 'Koszt przejścia karawany:' : 'Caravan Passage Cost:'}</span>
-                      <strong className="text-xl font-mono text-[#d4af37]">${selectedExcursion.price} × {guests} = ${selectedExcursion.price * guests}</strong>
+                    <div className="bg-[#241a12] border border-[#d4af37]/20 rounded-xl p-4 space-y-2 text-xs">
+                      <div className="flex justify-between items-center text-stone-400 font-mono uppercase">
+                        <span>Base Price (${selectedExcursion.price} × {guests} guests):</span>
+                        <span>${selectedExcursion.price * guests}</span>
+                      </div>
+                      {appliedPromo && (
+                        <div className="flex justify-between items-center text-emerald-400 font-mono font-bold">
+                          <span>Promo Discount ({appliedPromo.code} - {appliedPromo.discountPct}%):</span>
+                          <span>-${Math.round(((selectedExcursion.price * guests) * appliedPromo.discountPct) / 100)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-2 border-t border-[#d4af37]/20">
+                        <span className="text-[#e6c280] font-serif uppercase tracking-wider font-bold">Total Tribute:</span>
+                        <strong className="text-xl font-mono text-[#d4af37]">
+                          ${(selectedExcursion.price * guests) - (appliedPromo ? Math.round(((selectedExcursion.price * guests) * appliedPromo.discountPct) / 100) : 0)}
+                        </strong>
+                      </div>
                     </div>
 
                     {/* Action buttons */}

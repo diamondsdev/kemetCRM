@@ -25,9 +25,10 @@ const EXCURSION_NAMES_MAP: Record<string, string> = {
 interface ReviewSystemProps {
   excursionId?: string; // If supplied, filters reviews to just this excursion
   onReviewAdded?: () => void;
+  onRequestAuth?: (reason: string) => void;
 }
 
-export default function ReviewSystem({ excursionId, onReviewAdded }: ReviewSystemProps) {
+export default function ReviewSystem({ excursionId, onReviewAdded, onRequestAuth }: ReviewSystemProps) {
   const [reviews, setReviews] = useState<Review[]>(() => {
     const saved = localStorage.getItem('kemet_reviews');
     if (saved) {
@@ -39,6 +40,17 @@ export default function ReviewSystem({ excursionId, onReviewAdded }: ReviewSyste
     }
     return [];
   });
+
+  // Pre-fill user name if logged in
+  useEffect(() => {
+    const savedUserStr = localStorage.getItem('kemet_user');
+    if (savedUserStr) {
+      try {
+        const u = JSON.parse(savedUserStr);
+        if (u && u.name) setReviewAuthor(u.name);
+      } catch (e) {}
+    }
+  }, []);
 
   // Load reviews from secure backend database on mount
   useEffect(() => {
@@ -79,6 +91,18 @@ export default function ReviewSystem({ excursionId, onReviewAdded }: ReviewSyste
   // Handle adding review
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check if user is registered/logged in
+    const savedUserStr = localStorage.getItem('kemet_user');
+    if (!savedUserStr) {
+      if (onRequestAuth) {
+        onRequestAuth("Registration is required to post traveler reviews and witness testimonies.");
+      } else {
+        alert("Registration is required to post traveler reviews.");
+      }
+      return;
+    }
+
     if (!reviewAuthor.trim() || !reviewComment.trim()) return;
 
     const chosenAvatarObj = AVATARS.find(av => av.value === selectedAvatar);

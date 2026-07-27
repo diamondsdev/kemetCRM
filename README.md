@@ -29,14 +29,23 @@ Designed to mimic a royal treasury and scribe’s papyrus scroll, Kemet Tours is
 *   Filter by categories and search titles, taglines, or locations.
 *   Every excursion comes with transparent pricing, duration, ratings, curated lists of inclusions/highlights, and a **Thematic Ancient Lore** snippet providing historical immersion.
 
-### 2. 𓎬 Sacred Caravan Ledger & Checkout (`BookingManager`)
+### 2. 𓎬 Sacred Caravan Ledger & Enhanced Checkout (`ExcursionCatalog` & `BookingManager`)
 *   Step-by-step hardened checkout interface for securing spots on excursions with instant input sanitization and rate-limit defenses.
-*   Input guest counts, departure dates, traveler names, validated emails, and custom special instructions.
+*   Input guest counts, departure dates, traveler names, validated emails, **Phone Number**, **WhatsApp Number**, **Hotel Name**, **Room Number**, and **Preferred Pickup Time**.
+*   **Promocode Scroll System**: Registered travelers can enter promotional scrolls (e.g. `PHARAOH25` for 25% off or `SOLSTICERA15` for 15% off) with live discount calculations applied directly to the total cost.
+*   **Auto-Fill Convenience**: Pre-populates traveler contact information automatically from local account credentials.
 *   Instantly generates a printable **Papyrus Scroll Invoice** featuring a full financial breakdown and priest blessings.
 *   Triggers the **Sacred Scarab Celebration**—interactive, crawling golden scarabs running across the user's viewport upon successful reservations.
 *   Embeds custom generated **QR Codes** (`BookingQRCode`) containing encrypted verification tokens for high-tech check-ins.
 
-### 3. 𓋹 Gemini AI Scribe & Interactive Oracle (`ScribeOracle`)
+### 3. 🔐 User Account & Authentication Modal (`AuthModal`)
+*   **Royal Traveler Registry**: Dedicated registration and login modal styled in Pharaonic gold and obsidian.
+*   **Selective Registration Policy**: Browsing tours and making standard bookings does NOT require account registration. Registration is strictly required ONLY when:
+    *   Applying promo code scrolls for discounts during checkout.
+    *   Inscribing public testimonies and reviews in the Egyptology gallery.
+*   Features client & server password verification, local token persistence (`kemet_user`), and custom avatar selection.
+
+### 4. 𓋹 Gemini AI Scribe & Interactive Oracle (`ScribeOracle`)
 *   **The Scribe Planner:** Connects server-side with Gemini 3.5 Flash to construct custom, bespoke travel itineraries based on interests, duration (days), intensity, and special requests. Outputs structured JSON styled as a royal greeting.
 *   **The Scribe Chat:** Converse directly in real-time with *Sennedjem, Royal Scribe of Kemet*. Sennedjem speaks in elegant Pharaonic prose and provides answers about Egyptian mythology, travel tips, and desert coordinates. Guarded by a dedicated rate-limiter (12 petitions/min).
 
@@ -234,7 +243,11 @@ The backend operates as a stateful JSON database server. Here is the REST specif
 *   `POST /api/itinerary`: Sends structured parameters to Gemini 3.5 Flash. Returns an itinerary matching the `CustomItinerary` JSON schema.
 *   `POST /api/scribe-chat`: Forwards traveler prompts to Sennedjem, returning rich Pharaonic answers.
 
-### 2. Excursions (CRUD CMS - Admin Authenticated)
+### 2. User Authentication (Rate Limited: 10 req/15 min)
+*   `POST /api/auth/register`: Registers a new traveler account with encrypted password storage (`bcryptjs` hashing) and input sanitization.
+*   `POST /api/auth/login`: Authenticates user credentials and returns user profile & authorization token.
+
+### 3. Excursions (CRUD CMS - Admin Authenticated)
 *   `GET /api/excursions`: Fetch all active tour packages.
 *   `POST /api/excursions`: Add/Update an excursion (requires admin token or passcode header).
 *   `DELETE /api/excursions/:id`: Banish an excursion from the temple database.

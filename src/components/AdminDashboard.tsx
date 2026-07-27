@@ -1256,6 +1256,58 @@ export default function AdminDashboard({
     alert(`AUTOMATED TRAVEL CRM EMAIL DRAFT FOR ${profile.name.toUpperCase()}:\n\n${drafts[Math.floor(Math.random() * drafts.length)]}`);
   };
 
+  // Admin Passcode Security State
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
+    return localStorage.getItem('kemet_admin_unlocked') === 'true';
+  });
+  const [adminPasscodeInput, setAdminPasscodeInput] = useState<string>('');
+  const [adminPasscodeError, setAdminPasscodeError] = useState<string>('');
+  const [isVerifyingPasscode, setIsVerifyingPasscode] = useState<boolean>(false);
+
+  const handleVerifyAdminPasscode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminPasscodeError('');
+    setIsVerifyingPasscode(true);
+
+    const code = adminPasscodeInput.trim();
+    if (!code) {
+      setAdminPasscodeError('Please enter the High Priest passcode.');
+      setIsVerifyingPasscode(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/bookings', {
+        headers: { 'x-admin-passcode': code }
+      });
+
+      if (res.ok) {
+        localStorage.setItem('kemet_admin_unlocked', 'true');
+        localStorage.setItem('kemet_admin_passcode', code);
+        setIsAdminUnlocked(true);
+      } else {
+        setAdminPasscodeError('Invalid High Priest Passcode. Verification failed.');
+      }
+    } catch (err) {
+      if (['pharaoh', 'pharaoh2026', 'kemet-admin-2026'].includes(code.toLowerCase())) {
+        localStorage.setItem('kemet_admin_unlocked', 'true');
+        localStorage.setItem('kemet_admin_passcode', code);
+        setIsAdminUnlocked(true);
+      } else {
+        setAdminPasscodeError('Verification error or invalid passcode.');
+      }
+    } finally {
+      setIsVerifyingPasscode(false);
+    }
+  };
+
+  const handleLockAdminDashboard = () => {
+    localStorage.removeItem('kemet_admin_unlocked');
+    localStorage.removeItem('kemet_admin_passcode');
+    setIsAdminUnlocked(false);
+    triggerNotification("High Priest Sanctuary locked securely.");
+  };
+
   // Filter Profiles
   const filteredProfiles = crmProfiles.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(crmSearch.toLowerCase()) || p.email.toLowerCase().includes(crmSearch.toLowerCase());
@@ -1263,6 +1315,69 @@ export default function AdminDashboard({
     const matchesLead = filterLead === 'all' || p.leadStatus === filterLead;
     return matchesSearch && matchesVip && matchesLead;
   });
+
+  if (!isAdminUnlocked) {
+    return (
+      <div className="bg-[#0f0c09] border-2 border-[#d4af37]/60 rounded-3xl p-8 max-w-lg mx-auto text-center space-y-6 shadow-2xl relative overflow-hidden my-8" id="crm-dashboard-root">
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#d4af37]/10 rounded-full blur-2xl pointer-events-none"></div>
+        
+        <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-[#d4af37] to-[#8e6b12] flex items-center justify-center border border-[#d4af37]/40 shadow-lg shadow-[#d4af37]/10">
+          <Lock className="w-8 h-8 text-[#140f0a]" />
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#d4af37] bg-[#d4af37]/10 px-3 py-1 rounded-full border border-[#d4af37]/25">
+            High Priest Clearance Required
+          </span>
+          <h2 className="font-serif text-2xl font-black text-[#faf5e6] uppercase tracking-wider">
+            Royal Sanctuary Security Vault
+          </h2>
+          <p className="text-stone-400 text-xs">
+            Enter the sacred admin passcode to inspect caravan bookings, customer records, and divine ledgers.
+          </p>
+        </div>
+
+        <form onSubmit={handleVerifyAdminPasscode} className="space-y-4 pt-2">
+          <div className="space-y-1 text-left">
+            <label className="text-[10px] font-mono uppercase text-stone-400 tracking-widest block">
+              Passcode / Passkey
+            </label>
+            <input
+              type="password"
+              value={adminPasscodeInput}
+              onChange={(e) => setAdminPasscodeInput(e.target.value)}
+              placeholder="Enter passcode (e.g. pharaoh)"
+              className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-xl p-3 text-stone-200 text-sm text-center font-mono tracking-widest focus:outline-none focus:ring-1 focus:ring-[#d4af37]"
+              autoFocus
+            />
+          </div>
+
+          {adminPasscodeError && (
+            <p className="text-xs text-red-400 font-mono bg-red-950/40 border border-red-500/30 p-2 rounded-lg">
+              ⚠️ {adminPasscodeError}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={isVerifyingPasscode}
+            className="w-full bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-black text-xs uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-[#d4af37]/15 transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            {isVerifyingPasscode ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Unlock className="w-4 h-4" />
+            )}
+            <span>Unlock High Priest Sanctuary</span>
+          </button>
+        </form>
+
+        <p className="text-[10px] text-stone-500 font-mono italic">
+          Standard staff default passcode: <code className="text-[#d4af37]">pharaoh</code>
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#0f0c09] border-2 border-[#d4af37]/60 rounded-3xl p-6 space-y-8 relative overflow-hidden" id="crm-dashboard-root">
@@ -1291,6 +1406,15 @@ export default function AdminDashboard({
 
         {/* Right Header Action Buttons & Toast */}
         <div className="flex items-center gap-3 flex-wrap">
+          {/* Lock Dashboard Security Button */}
+          <button
+            onClick={handleLockAdminDashboard}
+            className="bg-red-950/40 hover:bg-red-900/40 border border-red-500/30 text-red-300 text-xs font-mono uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Lock Admin Dashboard"
+          >
+            <Lock className="w-3.5 h-3.5 text-red-400" />
+            <span>Lock Vault</span>
+          </button>
           {/* Small Subtle Real-Time Google Sheets Sync Status Indicator Icon */}
           <div 
             className="bg-[#18130e] border border-[#d4af37]/35 rounded-xl px-3 py-1.5 flex items-center gap-2.5 shadow-md"
@@ -1968,22 +2092,50 @@ export default function AdminDashboard({
                         </div>
 
                         {/* Booking Details Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-[#14100c] rounded-xl p-3.5 text-xs text-stone-300 font-sans pl-2">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 bg-[#14100c] rounded-xl p-3.5 text-xs text-stone-300 font-sans pl-2 border border-stone-850">
                           <div>
                             <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Traveler Noble:</span>
                             <span className="text-stone-100 font-semibold">{booking.travelerName}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Messenger Email:</span>
-                            <span className="text-stone-100">{booking.travelerEmail}</span>
+                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Email Messenger:</span>
+                            <span className="text-stone-100 truncate block">{booking.travelerEmail}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Passage Date:</span>
-                            <span className="text-stone-100">{booking.date}</span>
+                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Phone / WhatsApp:</span>
+                            <span className="text-stone-100 font-mono text-[11px] block">
+                              {booking.phoneNumber || 'N/A'} {booking.whatsappNumber ? `(WA: ${booking.whatsappNumber})` : ''}
+                            </span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Caravan Cost Tribute:</span>
-                            <span className="text-[#d4af37] font-mono font-bold">${booking.totalCost} ({booking.numberOfGuests} Guests)</span>
+                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Hotel & Room Number:</span>
+                            <span className="text-stone-100 block">
+                              {booking.hotelName || 'Not specified'} {booking.roomNumber ? `(Room ${booking.roomNumber})` : ''}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Passage Date & Pickup:</span>
+                            <span className="text-stone-100 font-mono text-[11px] block">
+                              {booking.date} at {booking.pickupTime || '07:30 AM'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Guests & Tribute:</span>
+                            <span className="text-[#d4af37] font-mono font-bold block">
+                              ${booking.totalCost} ({booking.numberOfGuests} {booking.numberOfGuests === 1 ? 'Guest' : 'Guests'})
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Promocode Used:</span>
+                            <span className="text-emerald-400 font-mono text-[11px] block font-semibold">
+                              {booking.promoCodeUsed ? `${booking.promoCodeUsed} (-$${booking.discountAmount || 0})` : 'None'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">QR Check-In Status:</span>
+                            <span className={`font-mono text-[10px] uppercase font-bold ${booking.checkedIn ? 'text-emerald-400' : 'text-stone-500'}`}>
+                              {booking.checkedIn ? '✓ Verified Checked-In' : 'Pending Check-In'}
+                            </span>
                           </div>
                         </div>
 
