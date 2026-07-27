@@ -706,8 +706,7 @@ export default function App() {
                   { label: t('nav_gallery', '𓅓 Photo Gallery'), id: 'gallery', target: 'gallery-section' },
                   { label: t('nav_cartouche', '𓉐 Name Translator'), id: 'cartouche', target: 'cartouche-section' },
                   { label: t('nav_faq', '𓇚 Questions & Answers'), id: 'faq', target: 'faq-section' },
-                  { label: t('nav_bookings', '𓎬 My Bookings'), id: 'bookings', target: 'ledger-section' },
-                  { label: t('nav_admin', '𓂀 Admin Portal'), id: 'admin', target: 'admin-section' }
+                  { label: t('nav_bookings', '𓎬 My Bookings'), id: 'bookings', target: 'ledger-section' }
                 ].map((item) => {
                   const isItemActive = activePage === item.id;
                   const text = item.label;
@@ -1117,6 +1116,45 @@ export default function App() {
           setTheme={setTheme}
           activePage={activePage}
         />
+
+        {/* FLOATING HIGH PRIEST ADMIN DASHBOARD BUTTON (Only shown when logged in as admin) */}
+        {isAdminVerified && (
+          <div className="fixed bottom-24 md:bottom-6 left-6 z-50 no-print">
+            <motion.button
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                if (activePage === 'admin') {
+                  scrollToSection('excursions-section');
+                } else {
+                  scrollToSection('admin-section');
+                }
+              }}
+              className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-[0_4px_25px_rgba(212,175,55,0.4)] border-2 transition-all cursor-pointer backdrop-blur-md ${
+                activePage === 'admin'
+                  ? 'bg-gradient-to-r from-[#d4af37] via-amber-400 to-[#b08e23] text-[#140f0a] border-white font-bold'
+                  : 'bg-[#18120c]/95 border-[#d4af37] text-[#e6c280] hover:text-white hover:border-amber-300'
+              }`}
+              title="Access High Priest Admin Dashboard"
+            >
+              <div className="relative flex items-center justify-center">
+                <span className="text-xl font-serif text-[#d4af37]">𓂀</span>
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#d4af37] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#d4af37]"></span>
+                </span>
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider leading-none">
+                  High Priest Admin
+                </span>
+                <span className="text-[9px] font-mono text-amber-200/90 leading-tight mt-0.5">
+                  {activePage === 'admin' ? '✓ Dashboard Active' : 'Open Dashboard'}
+                </span>
+              </div>
+            </motion.button>
+          </div>
+        )}
 
         {/* FLOATING WHATSAPP ASSISTANCE WIDGET */}
         <div className="fixed bottom-24 md:bottom-6 right-6 z-40 no-print">

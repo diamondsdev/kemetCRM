@@ -39,7 +39,8 @@ import {
   Lock,
   Unlock,
   Camera,
-  QrCode
+  QrCode,
+  Printer
 } from 'lucide-react';
 import { Booking, Excursion, Review, ScribeMessage } from '../types';
 import { useLanguage } from './LanguageContext';
@@ -736,6 +737,10 @@ export default function AdminDashboard({
   // Bulk Actions selection state for Caravan Ledger
   const [selectedBookingIds, setSelectedBookingIds] = useState<string[]>([]);
 
+  // Internal notes modal state for bookings
+  const [activeNoteModalBooking, setActiveNoteModalBooking] = useState<Booking | null>(null);
+  const [noteInputText, setNoteInputText] = useState<string>('');
+
   // Clear selected bookings whenever the active tab or caravan filters change
   useEffect(() => {
     setSelectedBookingIds([]);
@@ -745,6 +750,19 @@ export default function AdminDashboard({
   const triggerNotification = (text: string, type: 'success' | 'info' = 'success') => {
     setNotification({ text, type });
     setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleSaveBookingInternalNote = () => {
+    if (!activeNoteModalBooking) return;
+    const updatedBookings = bookings.map(b =>
+      b.id === activeNoteModalBooking.id
+        ? { ...b, internalNotes: noteInputText.trim() }
+        : b
+    );
+    onUpdateBookingsList(updatedBookings);
+    triggerNotification(`Internal note updated for booking #${activeNoteModalBooking.id.slice(-4)}!`);
+    setActiveNoteModalBooking(null);
+    setNoteInputText('');
   };
 
   const handleBulkApprove = () => {
@@ -778,6 +796,426 @@ export default function AdminDashboard({
       setSelectedBookingIds([]);
       triggerNotification(`Banished ${count} selected bookings from ledger`);
     }
+  };
+
+  const handleDownloadCSV = () => {
+    if (bookings.length === 0) {
+      triggerNotification("No bookings available in the sacred ledger to export.", "info");
+      return;
+    }
+    const headers = [
+      "Booking ID",
+      "Excursion Title",
+      "Traveler Name",
+      "Traveler Email",
+      "Phone Number",
+      "WhatsApp Number",
+      "Hotel Name",
+      "Room Number",
+      "Passage Date",
+      "Pickup Time",
+      "Guests Count",
+      "Total Cost ($)",
+      "Promo Code",
+      "Discount ($)",
+      "Status",
+      "Internal Notes",
+      "Checked In",
+      "Created At"
+    ];
+
+    const rows = bookings.map(b => [
+      `"${(b.id || '').replace(/"/g, '""')}"`,
+      `"${(b.excursionTitle || '').replace(/"/g, '""')}"`,
+      `"${(b.travelerName || '').replace(/"/g, '""')}"`,
+      `"${(b.travelerEmail || '').replace(/"/g, '""')}"`,
+      `"${(b.phoneNumber || '').replace(/"/g, '""')}"`,
+      `"${(b.whatsappNumber || '').replace(/"/g, '""')}"`,
+      `"${(b.hotelName || '').replace(/"/g, '""')}"`,
+      `"${(b.roomNumber || '').replace(/"/g, '""')}"`,
+      `"${(b.date || '').replace(/"/g, '""')}"`,
+      `"${(b.pickupTime || '').replace(/"/g, '""')}"`,
+      b.numberOfGuests || 1,
+      b.totalCost || 0,
+      `"${(b.promoCodeUsed || '').replace(/"/g, '""')}"`,
+      b.discountAmount || 0,
+      `"${(b.status || '').replace(/"/g, '""')}"`,
+      `"${(b.internalNotes || '').replace(/"/g, '""')}"`,
+      b.checkedIn ? 'Yes' : 'No',
+      `"${(b.createdAt || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Kemet_Caravan_Bookings_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    triggerNotification("Caravan bookings exported to CSV file successfully!");
+  };
+
+  const handleDownloadManifest = () => {
+    if (bookings.length === 0) {
+      triggerNotification("No bookings available in the sacred ledger to generate a manifest.", "info");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      triggerNotification("Please allow pop-ups to open the High Priest's Guest Manifest PDF print view.", "info");
+      return;
+    }
+
+    const totalRevenue = bookings.reduce((sum, b) => sum + (Number(b.totalCost) || 0), 0);
+    const uniqueTravelers = new Set(bookings.map(b => (b.travelerEmail || b.travelerName || '').toLowerCase().trim()).filter(Boolean)).size;
+    const confirmedCount = bookings.filter(b => b.status === 'Confirmed by High Priest' || b.status === 'Completed').length;
+    const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    const manifestHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Kemet Caravan Expeditions - High Priest Guest Manifest</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+            
+            @page {
+              size: A4 landscape;
+              margin: 12mm;
+            }
+
+            body {
+              font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+              background-color: #120e0b;
+              color: #f3e5c8;
+              margin: 0;
+              padding: 20px;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 2px solid #d4af37;
+              padding-bottom: 16px;
+              margin-bottom: 20px;
+            }
+
+            .logo-title {
+              display: flex;
+              align-items: center;
+              gap: 14px;
+            }
+
+            .title-group h1 {
+              font-family: 'Cinzel', serif;
+              color: #d4af37;
+              margin: 0;
+              font-size: 22px;
+              letter-spacing: 2px;
+              text-transform: uppercase;
+            }
+
+            .title-group p {
+              margin: 2px 0 0 0;
+              font-size: 11px;
+              color: #a89f91;
+              text-transform: uppercase;
+              letter-spacing: 1.5px;
+            }
+
+            .meta-info {
+              text-align: right;
+              font-size: 11px;
+              color: #d4af37;
+              font-family: monospace;
+            }
+
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 12px;
+              margin-bottom: 24px;
+            }
+
+            .stat-card {
+              background: #1c1611;
+              border: 1px solid rgba(212, 175, 55, 0.4);
+              border-radius: 8px;
+              padding: 12px 16px;
+            }
+
+            .stat-label {
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              color: #a89f91;
+              font-family: monospace;
+              display: block;
+            }
+
+            .stat-value {
+              font-size: 20px;
+              font-weight: 800;
+              color: #d4af37;
+              font-family: 'Cinzel', serif;
+              margin-top: 4px;
+              display: block;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+              font-size: 11px;
+            }
+
+            th {
+              background-color: #211a14;
+              color: #d4af37;
+              font-family: 'Cinzel', serif;
+              text-align: left;
+              padding: 10px;
+              border-bottom: 1px solid #d4af37;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              font-size: 10px;
+            }
+
+            td {
+              padding: 10px;
+              border-bottom: 1px solid #2a221b;
+              vertical-align: top;
+            }
+
+            tr:nth-child(even) {
+              background-color: #17120e;
+            }
+
+            .badge {
+              display: inline-block;
+              padding: 3px 8px;
+              border-radius: 12px;
+              font-size: 9px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              font-family: monospace;
+            }
+
+            .badge-pending {
+              background: rgba(245, 158, 11, 0.2);
+              color: #fcd34d;
+              border: 1px solid rgba(245, 158, 11, 0.5);
+            }
+
+            .badge-confirmed {
+              background: rgba(16, 185, 129, 0.2);
+              color: #6ee7b7;
+              border: 1px solid rgba(16, 185, 129, 0.5);
+            }
+
+            .badge-completed {
+              background: rgba(168, 85, 247, 0.2);
+              color: #c084fc;
+              border: 1px solid rgba(168, 85, 247, 0.5);
+            }
+
+            .note-box {
+              background: #241c15;
+              border-left: 3px solid #d4af37;
+              padding: 6px 10px;
+              margin-top: 4px;
+              border-radius: 0 4px 4px 0;
+              color: #e6c280;
+              font-size: 10px;
+            }
+
+            .footer {
+              margin-top: 30px;
+              padding-top: 12px;
+              border-top: 1px solid #2a221b;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 10px;
+              color: #786d5f;
+            }
+
+            @media print {
+              body {
+                background-color: #ffffff !important;
+                color: #1a1a1a !important;
+              }
+
+              .title-group h1 {
+                color: #8a6d1a !important;
+              }
+
+              .header {
+                border-bottom: 2px solid #8a6d1a !important;
+              }
+
+              .stat-card {
+                background: #fdfbf7 !important;
+                border: 1px solid #8a6d1a !important;
+              }
+
+              .stat-value {
+                color: #8a6d1a !important;
+              }
+
+              th {
+                background-color: #f5efe6 !important;
+                color: #5c4710 !important;
+                border-bottom: 2px solid #8a6d1a !important;
+              }
+
+              td {
+                border-bottom: 1px solid #e2d9cc !important;
+              }
+
+              tr:nth-child(even) {
+                background-color: #faf7f2 !important;
+              }
+
+              .note-box {
+                background: #f7f3eb !important;
+                border-left: 3px solid #8a6d1a !important;
+                color: #4a3d1b !important;
+              }
+
+              .badge-pending {
+                background: #fef3c7 !important;
+                color: #92400e !important;
+                border: 1px solid #f59e0b !important;
+              }
+
+              .badge-confirmed {
+                background: #d1fae5 !important;
+                color: #065f46 !important;
+                border: 1px solid #10b981 !important;
+              }
+
+              .badge-completed {
+                background: #f3e8ff !important;
+                color: #6b21a8 !important;
+                border: 1px solid #a855f7 !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo-title">
+              <div style="font-size: 28px; color: #d4af37;">𓋹</div>
+              <div class="title-group">
+                <h1>Kemet Caravan Expeditions</h1>
+                <p>High Priest Sacred Guest Manifest & Itinerary Summary</p>
+              </div>
+            </div>
+            <div class="meta-info">
+              <div><strong>Generated Date:</strong> ${dateStr}</div>
+              <div><strong>Ledger Version:</strong> 2026.7.27</div>
+              <div><strong>Sealed By:</strong> High Priest Temple Office</div>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-label">Total Bookings</span>
+              <span class="stat-value">${bookings.length}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Unique Travelers</span>
+              <span class="stat-value">${uniqueTravelers}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Sealed / Confirmed</span>
+              <span class="stat-value">${confirmedCount}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Total Ledger Value</span>
+              <span class="stat-value">$${totalRevenue.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Entry ID</th>
+                <th>Excursion / Expedition</th>
+                <th>Traveler Details</th>
+                <th>Hotel & Pickup</th>
+                <th>Date & Time</th>
+                <th>Guests</th>
+                <th>Total Cost</th>
+                <th>Status & Internal Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bookings.map(b => `
+                <tr>
+                  <td style="font-family: monospace; font-weight: bold; color: #d4af37;">#${b.id.slice(-6).toUpperCase()}</td>
+                  <td>
+                    <strong>${b.excursionTitle}</strong>
+                    ${b.promoCodeUsed ? `<div style="font-size: 9px; color: #10b981;">Promo: ${b.promoCodeUsed} (-$${b.discountAmount || 0})</div>` : ''}
+                  </td>
+                  <td>
+                    <strong>${b.travelerName}</strong>
+                    <div style="font-size: 10px; opacity: 0.8;">${b.travelerEmail}</div>
+                    <div style="font-size: 10px; opacity: 0.8;">Tel: ${b.phoneNumber || 'N/A'}</div>
+                  </td>
+                  <td>
+                    <div><strong>${b.hotelName}</strong></div>
+                    <div style="font-size: 10px; opacity: 0.8;">Room: ${b.roomNumber || 'N/A'}</div>
+                  </td>
+                  <td>
+                    <div><strong>${b.date}</strong></div>
+                    <div style="font-size: 10px; opacity: 0.8;">Pickup: ${b.pickupTime || 'Standard'}</div>
+                  </td>
+                  <td style="text-align: center; font-weight: bold;">${b.numberOfGuests}</td>
+                  <td style="font-weight: bold; color: #34d399;">$${b.totalCost}</td>
+                  <td>
+                    <span class="badge ${
+                      b.status === 'Pending Oracle Approval' ? 'badge-pending' :
+                      b.status === 'Confirmed by High Priest' ? 'badge-confirmed' : 'badge-completed'
+                    }">
+                      ${b.status === 'Pending Oracle Approval' ? 'Pending' : b.status === 'Confirmed by High Priest' ? 'Confirmed' : 'Completed'}
+                    </span>
+                    ${b.internalNotes ? `<div class="note-box"><strong>Note:</strong> ${b.internalNotes}</div>` : ''}
+                    ${b.specialRequests ? `<div style="font-size: 9px; font-style: italic; margin-top:2px;">Req: ${b.specialRequests}</div>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div>Confidential & Prophetic Document • Kemet Royal Expedition Archives</div>
+            <div>High Priest Seal Verification: VALIDATED</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(manifestHTML);
+    printWindow.document.close();
+    triggerNotification("Guest Manifest print summary generated successfully!");
   };
 
   useEffect(() => {
@@ -844,6 +1282,12 @@ export default function AdminDashboard({
   }, [bookings]);
 
   // Analytics Computations
+  const totalBookingsCount = bookings.length;
+  const uniqueTravelersCount = new Set(
+    bookings.map((b) => (b.travelerEmail || b.travelerName || '').toLowerCase().trim()).filter(Boolean)
+  ).size;
+  const totalRevenueAmount = bookings.reduce((sum, b) => sum + (Number(b.totalCost) || 0), 0);
+
   const totalGoldCoins = bookings
     .filter((b) => b.status === 'Confirmed by High Priest' || b.status === 'Completed')
     .reduce((sum, b) => sum + b.totalCost, 0);
@@ -1854,7 +2298,18 @@ export default function AdminDashboard({
                                   b.travelerName.toLowerCase().includes(caravanSearch.toLowerCase()) ||
                                   b.travelerEmail.toLowerCase().includes(caravanSearch.toLowerCase()) ||
                                   b.id.toLowerCase().includes(caravanSearch.toLowerCase());
-            const matchesStatus = caravanStatusFilter === 'all' || b.status === caravanStatusFilter;
+
+            let matchesStatus = true;
+            if (caravanStatusFilter === 'Pending Oracle Approval' || caravanStatusFilter === 'pending') {
+              matchesStatus = b.status === 'Pending Oracle Approval';
+            } else if (caravanStatusFilter === 'Confirmed by High Priest' || caravanStatusFilter === 'confirmed') {
+              matchesStatus = b.status === 'Confirmed by High Priest';
+            } else if (caravanStatusFilter === 'Completed' || caravanStatusFilter === 'completed') {
+              matchesStatus = b.status === 'Completed';
+            } else if (caravanStatusFilter === 'confirmed_completed') {
+              matchesStatus = b.status === 'Confirmed by High Priest' || b.status === 'Completed';
+            }
+
             return matchesSearch && matchesStatus;
           });
 
@@ -1864,15 +2319,83 @@ export default function AdminDashboard({
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
+              {/* Golden Summary Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Metric 1: Total Bookings */}
+                <div className="bg-[#18120d] border border-[#d4af37]/40 rounded-2xl p-5 relative overflow-hidden shadow-lg group hover:border-[#d4af37] transition-all">
+                  <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-[#d4af37] via-[#f3e5c8] to-[#8e6b12]"></div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-stone-400 text-[10px] font-mono uppercase tracking-widest block font-bold">Total Bookings</span>
+                      <strong className="text-3xl font-mono text-[#d4af37] block mt-1 font-black">{totalBookingsCount}</strong>
+                      <span className="text-xs text-stone-400 mt-1 block">Registered in sacred ledger</span>
+                    </div>
+                    <div className="bg-[#d4af37]/15 border border-[#d4af37]/30 p-3 rounded-xl text-[#d4af37] shadow-inner">
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric 2: Unique Travelers */}
+                <div className="bg-[#18120d] border border-[#d4af37]/40 rounded-2xl p-5 relative overflow-hidden shadow-lg group hover:border-[#d4af37] transition-all">
+                  <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-[#d4af37] via-[#e6c280] to-[#8e6b12]"></div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-stone-400 text-[10px] font-mono uppercase tracking-widest block font-bold">Unique Travelers</span>
+                      <strong className="text-3xl font-mono text-[#f3e5c8] block mt-1 font-black">{uniqueTravelersCount}</strong>
+                      <span className="text-xs text-stone-400 mt-1 block">Distinct pilgrim identities</span>
+                    </div>
+                    <div className="bg-[#d4af37]/15 border border-[#d4af37]/30 p-3 rounded-xl text-[#d4af37] shadow-inner">
+                      <Users className="w-6 h-6" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric 3: Total Revenue */}
+                <div className="bg-[#18120d] border border-[#d4af37]/40 rounded-2xl p-5 relative overflow-hidden shadow-lg group hover:border-[#d4af37] transition-all">
+                  <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-[#d4af37] via-emerald-400 to-[#8e6b12]"></div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-stone-400 text-[10px] font-mono uppercase tracking-widest block font-bold">Total Revenue</span>
+                      <strong className="text-3xl font-mono text-emerald-400 block mt-1 font-black">${totalRevenueAmount.toLocaleString()}</strong>
+                      <span className="text-xs text-stone-400 mt-1 block">Cumulative value of bookings</span>
+                    </div>
+                    <div className="bg-emerald-500/15 border border-emerald-500/30 p-3 rounded-xl text-emerald-400 shadow-inner">
+                      <DollarSign className="w-6 h-6" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="font-serif text-xl font-bold text-[#e6c280] uppercase tracking-wider">
                     Active Caravan Ledger Registry
                   </h3>
-                  <p className="text-stone-400 text-xs">Manage active customer registrations and high priest sealing approvals.</p>
+                  <p className="text-stone-400 text-xs">Manage active customer registrations, status tracking, and high priest sealing approvals.</p>
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
+                  {/* Download CSV Button */}
+                  <button
+                    onClick={handleDownloadCSV}
+                    className="bg-gradient-to-r from-[#d4af37] via-[#e6c280] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-black text-xs uppercase tracking-wider px-3.5 py-2 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all border border-[#d4af37]"
+                    title="Export current bookings list to downloadable CSV file format"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download CSV</span>
+                  </button>
+
+                  {/* Download Manifest PDF Button */}
+                  <button
+                    onClick={handleDownloadManifest}
+                    className="bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-700 hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-black text-xs uppercase tracking-wider px-3.5 py-2 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all border border-[#d4af37]"
+                    title="Generate a stylized, print-ready guest itinerary manifest PDF for High Priest records"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Download Manifest</span>
+                  </button>
+
                   <button
                     onClick={() => setIsScannerOpen(true)}
                     className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-bold text-xs uppercase tracking-wider px-3.5 py-2 rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all border border-[#d4af37]"
@@ -1898,7 +2421,7 @@ export default function AdminDashboard({
 
               {/* Search and Filters for Caravans */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 bg-[#14100c] p-4 rounded-xl border border-stone-850">
-                <div className="sm:col-span-8 relative">
+                <div className="sm:col-span-7 relative">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-stone-500" />
                   <input
                     type="text"
@@ -1909,18 +2432,22 @@ export default function AdminDashboard({
                   />
                 </div>
 
-                {/* Status filter */}
-                <div className="sm:col-span-4">
-                  <select
-                    value={caravanStatusFilter}
-                    onChange={(e) => setCaravanStatusFilter(e.target.value)}
-                    className="w-full bg-[#1c1611] border border-stone-800 rounded-lg p-2 text-xs text-stone-300 focus:outline-none focus:border-[#d4af37]/60"
-                  >
-                    <option value="all">All Caravan Statuses</option>
-                    <option value="Pending Oracle Approval">Pending Oracle Approval</option>
-                    <option value="Confirmed by High Priest">Confirmed by High Priest</option>
-                    <option value="Completed">Completed</option>
-                  </select>
+                {/* Status filter dropdown */}
+                <div className="sm:col-span-5 relative">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-[#d4af37] shrink-0" />
+                    <select
+                      value={caravanStatusFilter}
+                      onChange={(e) => setCaravanStatusFilter(e.target.value)}
+                      className="w-full bg-[#1c1611] border border-[#d4af37]/40 rounded-lg p-2 text-xs text-stone-200 focus:outline-none focus:border-[#d4af37]"
+                    >
+                      <option value="all">All Bookings ({bookings.length})</option>
+                      <option value="Pending Oracle Approval">⏳ Pending Requests ({bookings.filter(b => b.status === 'Pending Oracle Approval').length})</option>
+                      <option value="confirmed_completed">✨ Confirmed & Completed Trips ({bookings.filter(b => b.status === 'Confirmed by High Priest' || b.status === 'Completed').length})</option>
+                      <option value="Confirmed by High Priest">✅ Confirmed Trips ({bookings.filter(b => b.status === 'Confirmed by High Priest').length})</option>
+                      <option value="Completed">🏆 Completed Trips ({bookings.filter(b => b.status === 'Completed').length})</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -2064,16 +2591,38 @@ export default function AdminDashboard({
                               </button>
                             )}
 
-                            {/* Status chip */}
-                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-widest border ${
+                            {/* Color-Coded Status Badge */}
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border flex items-center gap-1.5 shadow-sm ${
                               booking.status === 'Pending Oracle Approval'
-                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-amber-500/10'
                                 : booking.status === 'Confirmed by High Priest'
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                : 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-emerald-500/10'
+                                : 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-purple-500/10'
                             }`}>
-                              {booking.status}
+                              {booking.status === 'Pending Oracle Approval' && <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />}
+                              {booking.status === 'Confirmed by High Priest' && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                              {booking.status === 'Completed' && <Award className="w-3.5 h-3.5 text-purple-400" />}
+                              <span>
+                                {booking.status === 'Pending Oracle Approval' ? 'Pending' : booking.status === 'Confirmed by High Priest' ? 'Confirmed' : 'Completed'}
+                              </span>
                             </span>
+
+                            {/* Internal Note Trigger Button */}
+                            <button
+                              onClick={() => {
+                                setActiveNoteModalBooking(booking);
+                                setNoteInputText(booking.internalNotes || '');
+                              }}
+                              className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                booking.internalNotes
+                                  ? 'bg-[#d4af37]/20 border-[#d4af37]/60 text-[#f3e5c8] shadow-sm shadow-[#d4af37]/10 hover:border-[#d4af37]'
+                                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200 hover:border-stone-700'
+                              }`}
+                              title="Add or edit High Priest internal notes"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-[#d4af37]" />
+                              <span>{booking.internalNotes ? 'Internal Note' : '+ Note'}</span>
+                            </button>
 
                             {/* Revoke button */}
                             <button
@@ -2143,6 +2692,26 @@ export default function AdminDashboard({
                           <div className="bg-[#110d0a] rounded-lg p-3 text-xs italic text-stone-400 border border-stone-900 ml-2">
                             <strong className="not-italic text-stone-500 font-mono text-[9px] uppercase tracking-wider block mb-0.5">Customer special requests:</strong>
                             "{booking.specialRequests}"
+                          </div>
+                        )}
+
+                        {booking.internalNotes && (
+                          <div className="bg-[#18140f] rounded-xl p-3.5 text-xs text-[#e6c280] border border-[#d4af37]/30 ml-2 relative group shadow-sm">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[10px] font-mono uppercase tracking-widest text-[#d4af37] font-bold flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5" /> High Priest Internal Note:
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setActiveNoteModalBooking(booking);
+                                  setNoteInputText(booking.internalNotes || '');
+                                }}
+                                className="text-[10px] font-mono text-stone-400 hover:text-[#d4af37] underline cursor-pointer"
+                              >
+                                Edit Note
+                              </button>
+                            </div>
+                            <p className="font-sans text-stone-200 whitespace-pre-wrap">{booking.internalNotes}</p>
                           </div>
                         )}
                       </div>
@@ -3532,6 +4101,119 @@ export default function AdminDashboard({
                 onClose={() => setIsScannerOpen(false)}
               />
             </div>
+          </div>
+        )}
+
+        {/* INTERNAL NOTE MODAL FOR HIGH PRIEST */}
+        {activeNoteModalBooking && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#18120d] border border-[#d4af37]/50 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl relative"
+            >
+              <div className="flex justify-between items-start border-b border-stone-800 pb-3">
+                <div>
+                  <span className="text-[10px] font-mono text-[#d4af37] uppercase tracking-widest block font-bold">
+                    Sacred Ledger Note
+                  </span>
+                  <h3 className="font-serif text-lg font-bold text-[#e6c280] mt-0.5">
+                    Internal Note for Booking #{activeNoteModalBooking.id.slice(-6).toUpperCase()}
+                  </h3>
+                  <p className="text-xs text-stone-400 mt-0.5">
+                    {activeNoteModalBooking.travelerName} • {activeNoteModalBooking.excursionTitle}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setActiveNoteModalBooking(null);
+                    setNoteInputText('');
+                  }}
+                  className="text-stone-500 hover:text-stone-300 p-1 rounded-lg hover:bg-stone-850 cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-mono text-stone-300 uppercase tracking-wider block">
+                  High Priest Confidential Notes & Special Details:
+                </label>
+                <textarea
+                  rows={4}
+                  value={noteInputText}
+                  onChange={(e) => setNoteInputText(e.target.value)}
+                  placeholder="Record special requests, VIP dietary needs, custom transport arrangements, or high priest instructions..."
+                  className="w-full bg-[#110d0a] border border-stone-800 rounded-xl p-3 text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider block">Quick Presets:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "VIP High Priority Traveler",
+                    "Special Dietary Needs",
+                    "Hotel Pickup Confirmed",
+                    "Private Guide Requested",
+                    "Wheelchair Accessible Required"
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        setNoteInputText(prev => prev ? `${prev}\n- ${preset}` : `- ${preset}`);
+                      }}
+                      className="bg-stone-900 hover:bg-[#d4af37]/15 border border-stone-800 hover:border-[#d4af37]/40 text-[10px] font-mono text-stone-300 hover:text-[#d4af37] px-2 py-1 rounded-md cursor-pointer transition-colors"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-stone-800">
+                {activeNoteModalBooking.internalNotes ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updatedBookings = bookings.map(b =>
+                        b.id === activeNoteModalBooking.id ? { ...b, internalNotes: '' } : b
+                      );
+                      onUpdateBookingsList(updatedBookings);
+                      triggerNotification(`Cleared internal note for booking #${activeNoteModalBooking.id.slice(-4)}`);
+                      setActiveNoteModalBooking(null);
+                      setNoteInputText('');
+                    }}
+                    className="text-red-400 hover:text-red-300 text-xs font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Clear Note
+                  </button>
+                ) : <div />}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveNoteModalBooking(null);
+                      setNoteInputText('');
+                    }}
+                    className="bg-stone-900 hover:bg-stone-800 text-stone-300 text-xs font-mono uppercase tracking-wider px-4 py-2 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveBookingInternalNote}
+                    className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] text-xs font-mono font-bold uppercase tracking-wider px-4 py-2 rounded-xl cursor-pointer shadow-md flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" /> Save Internal Note
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
