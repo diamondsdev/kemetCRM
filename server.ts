@@ -405,7 +405,7 @@ function apiRateLimiter(maxRequests: number, windowMs: number) {
 
     if (limitInfo.count >= maxRequests) {
       return res.status(429).json({
-        error: "Too many petitions sent to the divine sanctuary. Please allow the cosmic alignment to balance (wait 1 minute) before calling upon the Royal Scribe again."
+        error: "Too many petitions sent to the divine sanctuary. Please allow the cosmic alignment to balance before trying again."
       });
     }
 
@@ -418,28 +418,50 @@ function apiRateLimiter(maxRequests: number, windowMs: number) {
 // Security Headers Middleware
 function securityHeaders(req: express.Request, res: express.Response, next: express.NextFunction) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Content-Security-Policy', "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' https: data:; connect-src 'self' https:;");
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; frame-ancestors 'self' *;");
   next();
+}
+
+// Active Admin Session Management
+const activeAdminSessions = new Map<string, number>(); // token -> expiry timestamp
+
+function isValidAdminSession(token: string): boolean {
+  if (!token || typeof token !== 'string') return false;
+  const expiry = activeAdminSessions.get(token);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    activeAdminSessions.delete(token);
+    return false;
+  }
+  return true;
 }
 
 // Admin Authorization Middleware
 function adminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const passcodeHeader = req.headers['x-admin-passcode'];
+  const tokenHeader = (req.headers['x-admin-token'] as string) || (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
   const correctPasscode = process.env.ADMIN_PASSCODE || "pharaoh";
+
   if (passcodeHeader && (passcodeHeader as string).trim().toLowerCase() === correctPasscode.toLowerCase()) {
     return next();
   }
+
+  if (tokenHeader && isValidAdminSession(tokenHeader.trim())) {
+    return next();
+  }
+
   res.status(403).json({ error: "Access Denied. You are not authorized inside the High Priest inner chamber." });
 }
 
-// Input sanitization helper to strip potentially malicious characters or tags
+// Input sanitization helper to strip potentially malicious characters or script tags
 function sanitizeString(str: any, maxLen: number = 500): string {
   if (typeof str !== 'string') return '';
   let sanitized = str.trim();
-  // Strip HTML elements for XSS mitigation
+  // Strip dangerous script tags and raw HTML tags for XSS mitigation
+  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   sanitized = sanitized.replace(/<[^>]*>/g, '');
   if (sanitized.length > maxLen) {
     sanitized = sanitized.substring(0, maxLen);
@@ -454,6 +476,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.disable('x-powered-by');
   app.use(express.json({ limit: "15mb" }));
   app.use(express.urlencoded({ limit: "15mb", extended: true }));
   app.use(securityHeaders);
@@ -467,12 +490,18 @@ async function startServer() {
     res.json({ status: "ok", time: new Date().toISOString(), db: activeDbPath });
   });
 
+  const adminLoginLimiter = apiRateLimiter(10, 15 * 60 * 1000); // 10 attempts per 15 mins
+  const publicWriteLimiter = apiRateLimiter(15, 60 * 1000); // 15 write requests per minute
+
   // 2. Admin Verification
-  app.post("/api/admin/verify", (req, res) => {
+  app.post("/api/admin/verify", adminLoginLimiter, (req, res) => {
     const { passcode } = req.body;
     const correctPasscode = process.env.ADMIN_PASSCODE || "pharaoh";
     if (passcode && passcode.trim().toLowerCase() === correctPasscode.toLowerCase()) {
-      res.json({ success: true, token: "divine-scribe-token-9821" });
+      const sessionToken = `kemet-token-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const expiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours validity
+      activeAdminSessions.set(sessionToken, expiry);
+      res.json({ success: true, token: sessionToken, expiresAt: expiry });
     } else {
       res.status(401).json({ success: false, error: "Incorrect passcode. Access is restricted." });
     }
@@ -576,7 +605,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/excursions/sync-public-sheet", (req, res) => {
+  app.post("/api/excursions/sync-public-sheet", adminAuth, (req, res) => {
     try {
       const bulkData = req.body;
       if (!Array.isArray(bulkData)) {
@@ -744,7 +773,7 @@ async function startServer() {
     res.json(db.bookings);
   });
 
-  app.post("/api/bookings", async (req, res) => {
+  app.post("/api/bookings", publicWriteLimiter, async (req, res) => {
     try {
       const { excursionId, excursionTitle, travelerName, travelerEmail, date, numberOfGuests, totalCost, specialRequests } = req.body;
       const accessToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || req.body.accessToken;
@@ -820,7 +849,7 @@ async function startServer() {
   });
 
   // Instant Check-In Verification from QR Scanner
-  app.post("/api/bookings/:id/checkin", (req, res) => {
+  app.post("/api/bookings/:id/checkin", publicWriteLimiter, (req, res) => {
     const { id } = req.params;
     const db = loadDb();
     const booking = db.bookings.find(b => b.id === id);
@@ -843,7 +872,7 @@ async function startServer() {
     res.json(db.reviews);
   });
 
-  app.post("/api/reviews", (req, res) => {
+  app.post("/api/reviews", publicWriteLimiter, (req, res) => {
     try {
       const { excursionId, author, avatar, rating, comment } = req.body;
       if (!author || !comment) {
@@ -887,7 +916,7 @@ async function startServer() {
     res.json(db.community_photos || []);
   });
 
-  app.post("/api/community-photos", (req, res) => {
+  app.post("/api/community-photos", publicWriteLimiter, (req, res) => {
     try {
       const { image, caption, author, location } = req.body;
       if (!image || !author) {
@@ -924,7 +953,7 @@ async function startServer() {
     res.json(db.newsletter_signups);
   });
 
-  app.post("/api/newsletter", async (req, res) => {
+  app.post("/api/newsletter", publicWriteLimiter, async (req, res) => {
     try {
       const { email, interests, tier, accessToken } = req.body;
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

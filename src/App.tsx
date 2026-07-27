@@ -112,16 +112,23 @@ export default function App() {
     if (isAdminVerified) {
       const loadAdminBookings = async () => {
         const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+        const adminToken = localStorage.getItem('kemet_admin_token') || '';
         try {
           const resBk = await fetch('/api/bookings', {
             headers: {
-              'x-admin-passcode': passcode
+              'x-admin-passcode': passcode,
+              'x-admin-token': adminToken
             }
           });
           if (resBk.ok) {
             const bkData = await resBk.json();
             setBookings(bkData);
             localStorage.setItem('kemet_bookings', JSON.stringify(bkData));
+          } else if (resBk.status === 401 || resBk.status === 403) {
+            localStorage.removeItem('kemet_admin_verified');
+            localStorage.removeItem('kemet_admin_token');
+            localStorage.removeItem('kemet_admin_passcode');
+            setIsAdminVerified(false);
           }
         } catch (err) {
           console.error("Failed to load bookings ledger from server:", err);
@@ -130,6 +137,29 @@ export default function App() {
       loadAdminBookings();
     }
   }, [isAdminVerified]);
+
+  // Listen to window.location.hash for deep-linking & browser history navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '').trim().toLowerCase();
+      const validPages = ['tours', 'map', 'scribe', 'gallery', 'cartouche', 'faq', 'bookings', 'admin'];
+      if (validPages.includes(hash)) {
+        setActivePage(hash as any);
+        if (hash === 'admin') setIsAdminMode(true);
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Sync window hash when activePage changes
+  useEffect(() => {
+    if (window.location.hash.replace('#', '') !== activePage) {
+      window.history.replaceState(null, '', `#${activePage}`);
+    }
+  }, [activePage]);
   const [passcodeInput, setPasscodeInput] = useState<string>('');
   const [passcodeError, setPasscodeError] = useState<string>('');
   const [scrollY, setScrollY] = useState<number>(0);
@@ -325,10 +355,14 @@ export default function App() {
   // Handle cancelling/revoking a pending booking
   const handleCancelBooking = async (bookingId: string) => {
     const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+    const adminToken = localStorage.getItem('kemet_admin_token') || '';
     try {
       const response = await fetch(`/api/bookings/${bookingId}`, {
         method: 'DELETE',
-        headers: { 'x-admin-passcode': passcode }
+        headers: {
+          'x-admin-passcode': passcode,
+          'x-admin-token': adminToken
+        }
       });
       if (response.ok) {
         setBookings(prev => prev.filter(b => b.id !== bookingId));
@@ -343,12 +377,14 @@ export default function App() {
 
   const handleUpdateBookingStatus = async (id: string, status: Booking['status']) => {
     const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+    const adminToken = localStorage.getItem('kemet_admin_token') || '';
     try {
       const response = await fetch(`/api/bookings/${id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-passcode': passcode
+          'x-admin-passcode': passcode,
+          'x-admin-token': adminToken
         },
         body: JSON.stringify({ status })
       });
@@ -360,6 +396,33 @@ export default function App() {
     } catch (err) {
       console.error("Failed to update booking status on server:", err);
       setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+    }
+  };
+
+  // High Priest Admin Authentication Handler
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasscodeError('');
+    try {
+      const res = await fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passcode: passcodeInput })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        localStorage.setItem('kemet_admin_verified', 'true');
+        localStorage.setItem('kemet_admin_passcode', passcodeInput);
+        if (data.token) {
+          localStorage.setItem('kemet_admin_token', data.token);
+        }
+        setIsAdminVerified(true);
+        setPasscodeInput('');
+      } else {
+        setPasscodeError(data.error || 'Incorrect passcode. Access is restricted to the High Priest.');
+      }
+    } catch (err: any) {
+      setPasscodeError('Verification server unavailable. Please try again.');
     }
   };
 
@@ -953,13 +1016,57 @@ export default function App() {
                   transition={{ duration: 0.45, ease: 'easeOut' }}
                   className="space-y-8 scroll-mt-28"
                 >
-                  <AdminDashboard
-                    bookings={bookings}
-                    onUpdateBookingStatus={handleUpdateBookingStatus}
-                    onCancelBooking={handleCancelBooking}
-                    onUpdateBookingsList={handleUpdateBookingsList}
-                    onVerifyCheckIn={handleVerifyCheckIn}
-                  />
+                  {!isAdminVerified ? (
+                    <div className="max-w-md mx-auto bg-[#140f0c] border-2 border-[#d4af37] rounded-3xl p-8 text-center space-y-6 shadow-[0_0_50px_rgba(212,175,55,0.2)]">
+                      <div className="w-16 h-16 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/40 flex items-center justify-center mx-auto text-3xl text-[#d4af37]">
+                        𓂀
+                      </div>
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-mono text-[#d4af37] uppercase tracking-[0.25em]">Protected Area</span>
+                        <h2 className="font-serif text-2xl font-black text-[#e6c280] uppercase tracking-wider">High Priest Sanctuary</h2>
+                        <p className="text-stone-400 text-xs leading-relaxed">
+                          This portal is restricted to High Priests and Scribe Administrators. Enter your secret passcode to access live ledgers, CRM, and spreadsheet controls.
+                        </p>
+                      </div>
+
+                      <form onSubmit={handleAdminLoginSubmit} className="space-y-4 text-left">
+                        <div>
+                          <label className="block text-[10px] font-mono uppercase tracking-widest text-[#d4af37] mb-1.5">
+                            Passcode / Key
+                          </label>
+                          <input
+                            type="password"
+                            value={passcodeInput}
+                            onChange={(e) => setPasscodeInput(e.target.value)}
+                            placeholder="Enter High Priest passcode (e.g. pharaoh)"
+                            className="w-full bg-[#0c0907] border border-[#d4af37]/40 rounded-xl px-4 py-3 text-stone-200 text-sm font-mono focus:outline-none focus:border-[#d4af37]"
+                            required
+                          />
+                        </div>
+
+                        {passcodeError && (
+                          <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-3 text-red-400 text-xs font-mono">
+                            ⚠️ {passcodeError}
+                          </div>
+                        )}
+
+                        <button
+                          type="submit"
+                          className="w-full bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#f3e5c8] hover:to-[#d4af37] text-[#140f0a] font-serif font-black text-xs uppercase tracking-widest py-3.5 rounded-xl shadow-lg transition-all cursor-pointer"
+                        >
+                          Unlock Sanctuary
+                        </button>
+                      </form>
+                    </div>
+                  ) : (
+                    <AdminDashboard
+                      bookings={bookings}
+                      onUpdateBookingStatus={handleUpdateBookingStatus}
+                      onCancelBooking={handleCancelBooking}
+                      onUpdateBookingsList={handleUpdateBookingsList}
+                      onVerifyCheckIn={handleVerifyCheckIn}
+                    />
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

@@ -496,12 +496,14 @@ export default function AdminDashboard({
 
           // Push in bulk to the backend server to persist in kemet_db.json
           const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+          const adminToken = localStorage.getItem('kemet_admin_token') || '';
           try {
             const response = await fetch('/api/excursions/bulk', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'x-admin-passcode': passcode
+                'x-admin-passcode': passcode,
+                'x-admin-token': adminToken
               },
               body: JSON.stringify(updatedExcursions)
             });
@@ -603,8 +605,12 @@ export default function AdminDashboard({
 
     try {
       const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+      const adminToken = localStorage.getItem('kemet_admin_token') || '';
       const res = await fetch('/api/newsletter', {
-        headers: { 'x-admin-passcode': passcode }
+        headers: {
+          'x-admin-passcode': passcode,
+          'x-admin-token': adminToken
+        }
       });
       if (res.ok) {
         const serverSubs = await res.json();
@@ -870,10 +876,14 @@ export default function AdminDashboard({
   const handlePurgeAllData = async () => {
     if (window.confirm("𓋹 WARNING: You are about to initiate a TOTAL PURGE of the sacred records! This will permanently delete all customer bookings, active traveler cards, user reviews, newsletter subscriptions, and chat transcripts. This action is irreversible. Proceed?")) {
       const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+      const adminToken = localStorage.getItem('kemet_admin_token') || '';
       try {
         const response = await fetch('/api/admin/purge', {
           method: 'POST',
-          headers: { 'x-admin-passcode': passcode }
+          headers: {
+            'x-admin-passcode': passcode,
+            'x-admin-token': adminToken
+          }
         });
         if (response.ok) {
           const result = await response.json();
@@ -908,10 +918,14 @@ export default function AdminDashboard({
   const handleRestoreDivineSeeds = async () => {
     if (window.confirm("Do you wish to populate the sanctuary with premium pre-configured traveler data, reviews, and bookings for testing/presentation?")) {
       const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+      const adminToken = localStorage.getItem('kemet_admin_token') || '';
       try {
         const response = await fetch('/api/admin/seed', {
           method: 'POST',
-          headers: { 'x-admin-passcode': passcode }
+          headers: {
+            'x-admin-passcode': passcode,
+            'x-admin-token': adminToken
+          }
         });
         if (response.ok) {
           const result = await response.json();
@@ -1106,12 +1120,14 @@ export default function AdminDashboard({
     };
 
     const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+    const adminToken = localStorage.getItem('kemet_admin_token') || '';
     try {
       const response = await fetch('/api/excursions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-passcode': passcode
+          'x-admin-passcode': passcode,
+          'x-admin-token': adminToken
         },
         body: JSON.stringify(newEx)
       });
@@ -1141,12 +1157,14 @@ export default function AdminDashboard({
     if (!editingExcursion) return;
 
     const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+    const adminToken = localStorage.getItem('kemet_admin_token') || '';
     try {
       const response = await fetch('/api/excursions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-passcode': passcode
+          'x-admin-passcode': passcode,
+          'x-admin-token': adminToken
         },
         body: JSON.stringify(editingExcursion)
       });
@@ -1167,10 +1185,14 @@ export default function AdminDashboard({
   const handleDeleteExcursion = async (id: string) => {
     if (window.confirm("Are you sure you wish to banish this excursion offering from Kemet?")) {
       const passcode = localStorage.getItem('kemet_admin_passcode') || 'pharaoh';
+      const adminToken = localStorage.getItem('kemet_admin_token') || '';
       try {
         const response = await fetch(`/api/excursions/${id}`, {
           method: 'DELETE',
-          headers: { 'x-admin-passcode': passcode }
+          headers: {
+            'x-admin-passcode': passcode,
+            'x-admin-token': adminToken
+          }
         });
         if (response.ok) {
           const updatedCatalog = await response.json();
@@ -1310,6 +1332,20 @@ export default function AdminDashboard({
           >
             <Camera className="w-4 h-4" />
             <span>Scan Ticket QR</span>
+          </button>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem('kemet_admin_verified');
+              localStorage.removeItem('kemet_admin_token');
+              localStorage.removeItem('kemet_admin_passcode');
+              window.location.reload();
+            }}
+            className="bg-[#241a10] hover:bg-red-950/80 text-red-300 border border-red-500/40 font-serif font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl shadow-md flex items-center gap-2 cursor-pointer transition-all hover:border-red-400"
+            title="Lock High Priest Sanctuary and revoke current admin token"
+          >
+            <Shield className="w-4 h-4 text-red-400" />
+            <span>Lock Sanctuary</span>
           </button>
 
           {/* Live Feedback Toast inside the CRM */}
