@@ -846,6 +846,74 @@ async function startServer() {
     }
   });
 
+  app.post("/api/auth/request-reset", publicWriteLimiter, (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Please enter your registered email address." });
+      }
+
+      const db = loadDb();
+      if (!db.users) db.users = [];
+
+      const user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase());
+      if (!user) {
+        return res.status(404).json({ error: "No account found with this email address. Please register a new account." });
+      }
+
+      // Generate a 6-digit sacred pin for resetting password
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      user.resetPin = pin;
+      user.resetPinExpiry = Date.now() + 15 * 60 * 1000; // 15 mins
+      saveDb(db);
+
+      res.json({
+        success: true,
+        message: "Sacred verification code generated and sent to your email.",
+        demoPin: pin // Shared in response so user can test reset immediately without email setup
+      });
+    } catch (err: any) {
+      console.error("Auth request-reset error:", err);
+      res.status(500).json({ error: "Failed to process reset request." });
+    }
+  });
+
+  app.post("/api/auth/reset-password", publicWriteLimiter, (req, res) => {
+    try {
+      const { email, resetPin, newPassword } = req.body;
+      if (!email || !newPassword) {
+        return res.status(400).json({ error: "Email and new password are required." });
+      }
+
+      if (newPassword.length < 4) {
+        return res.status(400).json({ error: "Password must be at least 4 characters long." });
+      }
+
+      const db = loadDb();
+      if (!db.users) db.users = [];
+
+      const user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase());
+      if (!user) {
+        return res.status(404).json({ error: "User account not found." });
+      }
+
+      if (user.resetPin && user.resetPin !== resetPin?.trim()) {
+        return res.status(400).json({ error: "Invalid verification code. Please check your code or request a new one." });
+      }
+
+      user.password = sanitizeString(newPassword, 100);
+      delete user.resetPin;
+      delete user.resetPinExpiry;
+      saveDb(db);
+
+      const { password: _, ...userSafe } = user;
+      res.json({ success: true, user: userSafe, message: "Password updated successfully!" });
+    } catch (err: any) {
+      console.error("Auth reset-password error:", err);
+      res.status(500).json({ error: "Failed to reset password." });
+    }
+  });
+
   // ==========================================
   // CARAVAN BOOKINGS ENDPOINTS
   // ==========================================

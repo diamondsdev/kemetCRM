@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Compass, Sparkles, ScrollText, CalendarDays, Eye, BookOpen, Anchor, Map, Info, Sun, Moon, Globe, ChevronDown } from 'lucide-react';
-import { Booking } from './types';
+import { Compass, Sparkles, ScrollText, CalendarDays, Eye, BookOpen, Anchor, Map, Info, Sun, Moon, Globe, ChevronDown, User as UserIcon, LogIn, UserPlus } from 'lucide-react';
+import { Booking, User } from './types';
 import CartoucheGenerator from './components/CartoucheGenerator';
 import ScribeOracle from './components/ScribeOracle';
 import ExcursionCatalog, { EXCURSIONS_DATA } from './components/ExcursionCatalog';
@@ -14,6 +14,10 @@ import MobileBottomNav from './components/MobileBottomNav';
 import ScarabCelebration from './components/ScarabCelebration';
 import PapyrusScrollCelebration from './components/PapyrusScrollCelebration';
 import AncientSitesMap from './components/AncientSitesMap';
+import LoginPage from './components/LoginPage';
+import RegisterPage from './components/RegisterPage';
+import ResetPasswordPage from './components/ResetPasswordPage';
+import UserProfilePage from './components/UserProfilePage';
 import { useLanguage } from './components/LanguageContext';
 import { getAccessToken } from './lib/firebaseAuth';
 
@@ -21,6 +25,11 @@ export default function App() {
   const { language, setLanguage, t } = useLanguage();
   const [theme, setTheme] = useState<'desert' | 'nile'>(() => {
     return (localStorage.getItem('kemet_theme') as 'desert' | 'nile') || 'desert';
+  });
+
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('kemet_user');
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [bookings, setBookings] = useState<Booking[]>(() => {
@@ -46,7 +55,7 @@ export default function App() {
 
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [activeStage, setActiveStage] = useState<'browsing' | 'itinerary' | 'finalizing'>('browsing');
-  const [activePage, setActivePage] = useState<'tours' | 'map' | 'scribe' | 'gallery' | 'cartouche' | 'faq' | 'bookings' | 'admin'>('tours');
+  const [activePage, setActivePage] = useState<'tours' | 'map' | 'scribe' | 'gallery' | 'cartouche' | 'faq' | 'bookings' | 'admin' | 'login' | 'register' | 'reset-password' | 'profile'>('tours');
   const [isAdminVerified, setIsAdminVerified] = useState<boolean>(() => {
     return localStorage.getItem('kemet_admin_verified') === 'true';
   });
@@ -142,7 +151,7 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '').trim().toLowerCase();
-      const validPages = ['tours', 'map', 'scribe', 'gallery', 'cartouche', 'faq', 'bookings', 'admin'];
+      const validPages = ['tours', 'map', 'scribe', 'gallery', 'cartouche', 'faq', 'bookings', 'admin', 'login', 'register', 'reset-password', 'profile'];
       if (validPages.includes(hash)) {
         setActivePage(hash as any);
         if (hash === 'admin') setIsAdminMode(true);
@@ -794,6 +803,47 @@ export default function App() {
                   </AnimatePresence>
                 </div>
 
+                {/* User Account / Auth Button */}
+                {currentUser ? (
+                  <button
+                    onClick={() => setActivePage('profile')}
+                    className={`px-3 py-1.5 rounded-lg border font-mono text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 ${
+                      activePage === 'profile'
+                        ? 'bg-[#d4af37] text-[#140f0a] border-white shadow-md'
+                        : 'bg-[#241a10]/80 text-[#e6c280] border-[#d4af37]/50 hover:border-[#d4af37]'
+                    }`}
+                    title="View Profile & Royal Credentials"
+                  >
+                    <UserIcon className="w-3.5 h-3.5 text-[#d4af37]" />
+                    <span className="truncate max-w-[100px]">{currentUser.name.split(' ')[0]}</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setActivePage('login')}
+                      className={`px-3 py-1.5 rounded-lg border font-mono text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 ${
+                        activePage === 'login'
+                          ? 'bg-[#d4af37] text-[#140f0a] border-white shadow-md'
+                          : 'bg-[#241a10]/80 text-[#e6c280] border-[#d4af37]/40 hover:border-[#d4af37]'
+                      }`}
+                    >
+                      <LogIn className="w-3.5 h-3.5 text-[#d4af37]" />
+                      <span>Log In</span>
+                    </button>
+                    <button
+                      onClick={() => setActivePage('register')}
+                      className={`px-3 py-1.5 rounded-lg border font-mono text-xs font-bold transition-all duration-300 cursor-pointer flex items-center gap-1.5 ${
+                        activePage === 'register'
+                          ? 'bg-[#d4af37] text-[#140f0a] border-white shadow-md'
+                          : 'bg-gradient-to-r from-[#d4af37] to-[#b08e23] text-[#140f0a] border-[#d4af37] hover:brightness-110'
+                      }`}
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Register</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Theme Toggle Button */}
                 <button
                   onClick={() => setTheme(theme === 'desert' ? 'nile' : 'desert')}
@@ -1066,6 +1116,88 @@ export default function App() {
                       onVerifyCheckIn={handleVerifyCheckIn}
                     />
                   )}
+                </motion.div>
+              )}
+
+              {activePage === 'login' && (
+                <motion.div
+                  key="login-page"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  <LoginPage
+                    onLoginSuccess={(user) => {
+                      setCurrentUser(user);
+                    }}
+                    onNavigate={(page) => {
+                      setActivePage(page as any);
+                    }}
+                  />
+                </motion.div>
+              )}
+
+              {activePage === 'register' && (
+                <motion.div
+                  key="register-page"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  <RegisterPage
+                    onLoginSuccess={(user) => {
+                      setCurrentUser(user);
+                    }}
+                    onNavigate={(page) => {
+                      setActivePage(page as any);
+                    }}
+                  />
+                </motion.div>
+              )}
+
+              {activePage === 'reset-password' && (
+                <motion.div
+                  key="reset-password-page"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  <ResetPasswordPage
+                    onLoginSuccess={(user) => {
+                      setCurrentUser(user);
+                    }}
+                    onNavigate={(page) => {
+                      setActivePage(page as any);
+                    }}
+                  />
+                </motion.div>
+              )}
+
+              {activePage === 'profile' && (
+                <motion.div
+                  key="profile-page"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.35 }}
+                >
+                  <UserProfilePage
+                    currentUser={currentUser}
+                    onLogout={() => {
+                      localStorage.removeItem('kemet_user');
+                      setCurrentUser(null);
+                      setActivePage('tours');
+                    }}
+                    onNavigate={(page) => {
+                      setActivePage(page as any);
+                    }}
+                    onUpdateUser={(updated) => {
+                      setCurrentUser(updated);
+                    }}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>

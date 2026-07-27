@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Compass, HelpCircle, FileText, Menu, X, Sparkles, Image, MessageSquare, ShieldAlert, Award, Sun, Moon, Map } from 'lucide-react';
+import { Compass, HelpCircle, FileText, Menu, X, Sparkles, Image, MessageSquare, ShieldAlert, Award, Sun, Moon, Map, User } from 'lucide-react';
 
 interface MobileBottomNavProps {
   scrollToSection: (id: string) => void;
@@ -324,6 +324,32 @@ export default function MobileBottomNav({ scrollToSection, isAdminMode, setIsAdm
                   </motion.div>
                   <span className="font-serif text-xs font-bold text-[#e6c280] uppercase">My Bookings</span>
                   <span className="text-[9px] font-sans text-stone-500">View trip statuses & details</span>
+                </motion.button>
+
+                {/* 7. Royal Account Portal */}
+                <motion.button
+                  whileHover="hover"
+                  whileTap="tap"
+                  onClick={() => {
+                    handleNavClick('profile');
+                  }}
+                  className={`flex flex-col items-start gap-2 p-4 rounded-2xl text-left transition-all cursor-pointer border ${
+                    activePage === 'profile' || activePage === 'login' || activePage === 'register'
+                      ? 'bg-[#2a2016]/80 border-[#d4af37] shadow-[0_0_12px_rgba(212,175,55,0.15)]'
+                      : 'bg-[#1c1510] border-[#d4af37]/15 hover:border-[#d4af37]/45'
+                  }`}
+                >
+                  <motion.div
+                    variants={{
+                      hover: { scale: 1.3, rotate: 12, y: -2 },
+                      tap: { scale: 0.85, rotate: -8 }
+                    }}
+                    transition={{ type: 'spring', stiffness: 450, damping: 10 }}
+                  >
+                    <User className="w-5 h-5 text-[#d4af37]" />
+                  </motion.div>
+                  <span className="font-serif text-xs font-bold text-[#e6c280] uppercase">Traveler Portal</span>
+                  <span className="text-[9px] font-sans text-stone-500">Login, Register & Profile</span>
                 </motion.button>
 
 
