@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Lock, Mail, User as UserIcon, Phone, Building, Key, Sparkles, CheckCircle, ShieldAlert } from 'lucide-react';
+import { X, Lock, Mail, User as UserIcon, Phone, Sparkles, ShieldAlert } from 'lucide-react';
 import { User } from '../types';
 import { useLanguage } from './LanguageContext';
 
@@ -23,8 +23,6 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
   const [password, setPassword] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [whatsapp, setWhatsapp] = useState<string>('');
-  const [hotelName, setHotelName] = useState<string>('');
-  const [roomNumber, setRoomNumber] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -35,7 +33,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
 
     const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
     const payload = mode === 'register'
-      ? { name, email, password, phone, whatsapp: whatsapp || phone, hotelName, roomNumber }
+      ? { name, email, password, phone, whatsapp: whatsapp || phone }
       : { email, password };
 
     try {
@@ -83,11 +81,11 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
             <div className="w-14 h-14 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/40 flex items-center justify-center mx-auto text-2xl text-[#d4af37]">
               𓋹
             </div>
-            <span className="text-[10px] font-mono text-[#d4af37] uppercase tracking-[0.2em] block">
-              {mode === 'register' ? 'Royal Traveler Registry' : 'Traveler Portal'}
+            <span className="text-[10px] font-mono text-[#d4af37] uppercase tracking-[0.2em] block font-bold">
+              {mode === 'register' ? 'Sign Up' : 'Welcome Back'}
             </span>
             <h3 className="font-serif text-2xl font-black text-[#e6c280] uppercase tracking-wider">
-              {mode === 'register' ? 'Inscribe Thy Account' : 'Welcome Back, Traveler'}
+              {mode === 'register' ? 'Create Your Account' : 'Log In to Account'}
             </h3>
 
             {reason && (
@@ -136,7 +134,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
               <div className="space-y-1">
-                <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5">
+                <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5 font-semibold">
                   <UserIcon className="w-3 h-3 text-[#d4af37]" /> Full Name *
                 </label>
                 <input
@@ -144,14 +142,14 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Queen Nefertari / Ramses Smith"
+                  placeholder="e.g. Sarah Jenkins"
                   className="w-full bg-[#0c0907] border border-[#d4af37]/30 rounded-xl px-3.5 py-2.5 text-stone-200 text-xs focus:outline-none focus:border-[#d4af37]"
                 />
               </div>
             )}
 
             <div className="space-y-1">
-              <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5 font-semibold">
                 <Mail className="w-3 h-3 text-[#d4af37]" /> Email Address *
               </label>
               <input
@@ -159,13 +157,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your.email@domain.com"
+                placeholder="your.email@example.com"
                 className="w-full bg-[#0c0907] border border-[#d4af37]/30 rounded-xl px-3.5 py-2.5 text-stone-200 text-xs focus:outline-none focus:border-[#d4af37]"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5 font-semibold">
                 <Lock className="w-3 h-3 text-[#d4af37]" /> Password *
               </label>
               <input
@@ -179,35 +177,18 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
             </div>
 
             {mode === 'register' && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-[#d4af37]" /> Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+20 120 218 1834"
-                      className="w-full bg-[#0c0907] border border-[#d4af37]/30 rounded-xl px-3 py-2 text-stone-200 text-xs focus:outline-none focus:border-[#d4af37]"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1">
-                      <Building className="w-3 h-3 text-[#d4af37]" /> Hotel Name
-                    </label>
-                    <input
-                      type="text"
-                      value={hotelName}
-                      onChange={(e) => setHotelName(e.target.value)}
-                      placeholder="e.g. Steigenberger Alcazar"
-                      className="w-full bg-[#0c0907] border border-[#d4af37]/30 rounded-xl px-3 py-2 text-stone-200 text-xs focus:outline-none focus:border-[#d4af37]"
-                    />
-                  </div>
-                </div>
-              </>
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1 font-semibold">
+                  <Phone className="w-3 h-3 text-[#d4af37]" /> Phone / WhatsApp Number
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+20 120 218 1834"
+                  className="w-full bg-[#0c0907] border border-[#d4af37]/30 rounded-xl px-3 py-2 text-stone-200 text-xs focus:outline-none focus:border-[#d4af37]"
+                />
+              </div>
             )}
 
             <button
@@ -218,10 +199,10 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess, reason }: A
               {loading ? (
                 <>
                   <span className="w-4 h-4 border-2 border-[#140f0a] border-t-transparent rounded-full animate-spin"></span>
-                  <span>Verifying Royal Ledger...</span>
+                  <span>Processing...</span>
                 </>
               ) : (
-                <span>{mode === 'register' ? 'Inscribe Royal Account' : 'Log In To Sanctuary'}</span>
+                <span>{mode === 'register' ? 'Create Account' : 'Log In'}</span>
               )}
             </button>
           </form>

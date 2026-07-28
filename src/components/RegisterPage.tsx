@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { User as UserIcon, Mail, Lock, Phone, Building, Sparkles, CheckCircle, ArrowRight, ShieldCheck, LogIn } from 'lucide-react';
+import { User as UserIcon, Mail, Lock, Phone, CheckCircle, ArrowRight, LogIn } from 'lucide-react';
 import { User } from '../types';
 
 interface RegisterPageProps {
@@ -14,8 +14,6 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [hotelName, setHotelName] = useState('');
-  const [roomNumber, setRoomNumber] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -34,9 +32,7 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
           email,
           password,
           phone,
-          whatsapp: whatsapp || phone,
-          hotelName,
-          roomNumber
+          whatsapp: whatsapp || phone
         })
       });
 
@@ -49,7 +45,7 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
       onLoginSuccess(data.user);
       onNavigate('profile');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Registration failed. Please review your information.');
+      setErrorMsg(err.message || 'Registration failed. Please check your information.');
     } finally {
       setLoading(false);
     }
@@ -71,13 +67,13 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
             𓀚
           </div>
           <span className="text-[10px] font-mono text-[#d4af37] uppercase tracking-[0.25em] block font-bold">
-            Royal Traveler Registry
+            New Traveler Sign Up
           </span>
           <h2 className="font-serif text-3xl font-black text-[#e6c280] uppercase tracking-wider">
-            Inscribe Thy Account
+            Create Your Account
           </h2>
           <p className="text-xs font-sans text-stone-400">
-            Join the Kemet Society to unlock 30% discount promo codes, fast caravan bookings & digital tickets.
+            Sign up for Kemet Tours to get 30% discount codes, fast bookings, and digital tickets.
           </p>
         </div>
 
@@ -85,15 +81,15 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
         <div className="bg-[#120d09] border border-[#d4af37]/30 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-[#d4af37] shrink-0" />
-            <span className="text-[11px] font-mono text-stone-300">30% Off Promo Codes</span>
+            <span className="text-[11px] font-mono text-stone-300">30% Off Discount Codes</span>
           </div>
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-[#d4af37] shrink-0" />
-            <span className="text-[11px] font-mono text-stone-300">Fast Hotel Check-In</span>
+            <span className="text-[11px] font-mono text-stone-300">Fast Easy Booking</span>
           </div>
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4 text-[#d4af37] shrink-0" />
-            <span className="text-[11px] font-mono text-stone-300">Papyrus QR Tokens</span>
+            <span className="text-[11px] font-mono text-stone-300">Digital Tickets & QR</span>
           </div>
         </div>
 
@@ -116,7 +112,7 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Queen Nefertari / Ramses Smith"
+                placeholder="e.g. Sarah Jenkins"
                 className="w-full bg-[#0d0a07] border border-[#d4af37]/30 focus:border-[#d4af37] rounded-xl px-4 py-2.5 text-stone-200 text-xs focus:outline-none placeholder-stone-600"
               />
             </div>
@@ -130,7 +126,7 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@domain.com"
+                placeholder="you@example.com"
                 className="w-full bg-[#0d0a07] border border-[#d4af37]/30 focus:border-[#d4af37] rounded-xl px-4 py-2.5 text-stone-200 text-xs focus:outline-none placeholder-stone-600"
               />
             </div>
@@ -153,41 +149,13 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5 font-semibold">
-                <Phone className="w-3.5 h-3.5 text-[#d4af37]" /> Phone / WhatsApp
+                <Phone className="w-3.5 h-3.5 text-[#d4af37]" /> Phone / WhatsApp Number
               </label>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+20 120 218 1834"
-                className="w-full bg-[#0d0a07] border border-[#d4af37]/30 focus:border-[#d4af37] rounded-xl px-4 py-2.5 text-stone-200 text-xs focus:outline-none placeholder-stone-600"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5 font-semibold">
-                <Building className="w-3.5 h-3.5 text-[#d4af37]" /> Hotel / Resort Name
-              </label>
-              <input
-                type="text"
-                value={hotelName}
-                onChange={(e) => setHotelName(e.target.value)}
-                placeholder="e.g. Steigenberger Alcazar"
-                className="w-full bg-[#0d0a07] border border-[#d4af37]/30 focus:border-[#d4af37] rounded-xl px-4 py-2.5 text-stone-200 text-xs focus:outline-none placeholder-stone-600"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono uppercase tracking-widest text-stone-300 flex items-center gap-1.5 font-semibold">
-                Room Number
-              </label>
-              <input
-                type="text"
-                value={roomNumber}
-                onChange={(e) => setRoomNumber(e.target.value)}
-                placeholder="e.g. Villa 402 / Room 108"
                 className="w-full bg-[#0d0a07] border border-[#d4af37]/30 focus:border-[#d4af37] rounded-xl px-4 py-2.5 text-stone-200 text-xs focus:outline-none placeholder-stone-600"
               />
             </div>
@@ -201,11 +169,11 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
             {loading ? (
               <>
                 <span className="w-4 h-4 border-2 border-[#140f0a] border-t-transparent rounded-full animate-spin" />
-                <span>Inscribing Royal Ledger...</span>
+                <span>Creating account...</span>
               </>
             ) : (
               <>
-                <span>Inscribe Royal Account</span>
+                <span>Create Account</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -215,7 +183,7 @@ export default function RegisterPage({ onLoginSuccess, onNavigate }: RegisterPag
         {/* Login Navigation */}
         <div className="text-center pt-2">
           <p className="text-xs text-stone-400 font-sans">
-            Already registered?{' '}
+            Already have an account?{' '}
             <button
               onClick={() => onNavigate('login')}
               className="text-[#d4af37] font-bold hover:underline font-serif uppercase tracking-wider cursor-pointer ml-1 inline-flex items-center gap-1"

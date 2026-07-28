@@ -58,13 +58,13 @@ export default function LoginPage({ onLoginSuccess, onNavigate }: LoginPageProps
             𓋹
           </div>
           <span className="text-[10px] font-mono text-[#d4af37] uppercase tracking-[0.25em] block font-bold">
-            High Priest Sanctuary Access
+            Account Login
           </span>
           <h2 className="font-serif text-3xl font-black text-[#e6c280] uppercase tracking-wider">
-            Traveler Login
+            Log In
           </h2>
           <p className="text-xs font-sans text-stone-400">
-            Welcome back to Kemet Caravan Expeditions.
+            Welcome back to Kemet Tours.
           </p>
         </div>
 
@@ -131,11 +131,11 @@ export default function LoginPage({ onLoginSuccess, onNavigate }: LoginPageProps
             {loading ? (
               <>
                 <span className="w-4 h-4 border-2 border-[#140f0a] border-t-transparent rounded-full animate-spin" />
-                <span>Authenticating...</span>
+                <span>Logging in...</span>
               </>
             ) : (
               <>
-                <span>Enter Sanctuary</span>
+                <span>Log In</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -163,12 +163,12 @@ export default function LoginPage({ onLoginSuccess, onNavigate }: LoginPageProps
         {/* Register Navigation */}
         <div className="text-center pt-2">
           <p className="text-xs text-stone-400 font-sans">
-            New traveler to Kemet?{' '}
+            Don't have an account?{' '}
             <button
               onClick={() => onNavigate('register')}
               className="text-[#d4af37] font-bold hover:underline font-serif uppercase tracking-wider cursor-pointer ml-1 inline-flex items-center gap-1"
             >
-              <UserPlus className="w-3.5 h-3.5 inline" /> Inscribe Account
+              <UserPlus className="w-3.5 h-3.5 inline" /> Create Account
             </button>
           </p>
         </div>

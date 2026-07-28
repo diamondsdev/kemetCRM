@@ -17,9 +17,9 @@ export default function UserProfilePage({ currentUser, onLogout, onNavigate, onU
         <div className="w-16 h-16 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/40 flex items-center justify-center text-3xl text-[#d4af37]">
           𓀚
         </div>
-        <h2 className="font-serif text-2xl font-bold text-[#e6c280]">No Active Royal Session</h2>
+        <h2 className="font-serif text-2xl font-bold text-[#e6c280]">Please Log In</h2>
         <p className="text-xs text-stone-400 max-w-sm">
-          Please log in or register to view your traveler sanctuary, discount codes, and active trip tickets.
+          Please log in or register to view your account, discount codes, and active tour tickets.
         </p>
         <div className="flex gap-3">
           <button
@@ -32,7 +32,7 @@ export default function UserProfilePage({ currentUser, onLogout, onNavigate, onU
             onClick={() => onNavigate('register')}
             className="bg-stone-900 border border-stone-800 text-stone-200 hover:text-[#d4af37] font-serif font-bold text-xs uppercase px-5 py-2.5 rounded-xl cursor-pointer"
           >
-            Register Account
+            Create Account
           </button>
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function UserProfilePage({ currentUser, onLogout, onNavigate, onU
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-[#d4af37] bg-[#d4af37]/15 px-2.5 py-0.5 rounded-full border border-[#d4af37]/30 font-bold">
-                  {currentUser.role === 'admin' ? 'High Priest Admin' : 'Inscribed Royal Traveler'}
+                  {currentUser.role === 'admin' ? 'Administrator' : 'Kemet Member'}
                 </span>
                 <span className="text-[10px] font-mono text-stone-400">ID: #{currentUser.id.slice(-6).toUpperCase()}</span>
               </div>
@@ -113,7 +113,7 @@ export default function UserProfilePage({ currentUser, onLogout, onNavigate, onU
         {/* Left Column: Member Perks */}
         <div className="bg-[#18120c] border border-[#d4af37]/30 rounded-2xl p-6 space-y-4">
           <h3 className="font-serif text-base font-bold text-[#e6c280] uppercase tracking-wider flex items-center gap-2 border-b border-stone-800 pb-3">
-            <Sparkles className="w-4 h-4 text-[#d4af37]" /> Royal Privileges
+            <Sparkles className="w-4 h-4 text-[#d4af37]" /> Member Benefits
           </h3>
 
           <ul className="space-y-3 text-xs text-stone-300">
@@ -121,21 +121,21 @@ export default function UserProfilePage({ currentUser, onLogout, onNavigate, onU
               <Check className="w-4 h-4 text-[#d4af37] shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold text-stone-200 block">30% Discount Code Active</span>
-                <span className="text-[10px] text-stone-400 font-mono">Use code <strong>ROYAL30</strong> at checkout for 30% off any caravan excursion.</span>
+                <span className="text-[10px] text-stone-400 font-mono">Use code <strong>ROYAL30</strong> at checkout for 30% off any tour.</span>
               </div>
             </li>
             <li className="flex items-start gap-2.5">
               <Check className="w-4 h-4 text-[#d4af37] shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-stone-200 block">Express Hotel Pickup</span>
-                <span className="text-[10px] text-stone-400">Your hotel & room details auto-fill into every booking ledger.</span>
+                <span className="font-bold text-stone-200 block">Easy Hotel Pickup</span>
+                <span className="text-[10px] text-stone-400">Save hotel & room details in your profile for quick booking.</span>
               </div>
             </li>
             <li className="flex items-start gap-2.5">
               <Check className="w-4 h-4 text-[#d4af37] shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-stone-200 block">Digital Papyrus Tokens</span>
-                <span className="text-[10px] text-stone-400">Access printable QR codes for smooth boarding at check-in.</span>
+                <span className="font-bold text-stone-200 block">Digital Tickets & QR Codes</span>
+                <span className="text-[10px] text-stone-400">Access QR tickets on your phone for easy check-in.</span>
               </div>
             </li>
           </ul>

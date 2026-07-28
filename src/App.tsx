@@ -10,6 +10,7 @@ import MobileBottomNav from './components/MobileBottomNav';
 import ScarabCelebration from './components/ScarabCelebration';
 import PapyrusScrollCelebration from './components/PapyrusScrollCelebration';
 import SEOMetadataManager from './components/SEOMetadataManager';
+import CookieConsentManager from './components/CookieConsentManager';
 import SEOHelper from './components/SEOHelper';
 import { useLanguage } from './components/LanguageContext';
 import { getAccessToken } from './lib/firebaseAuth';
@@ -513,6 +514,7 @@ export default function App() {
       style={theme === 'nile' ? { '--nile-bg-x': `${scrollY * 0.05}px` } as React.CSSProperties : undefined}
     >
       <SEOMetadataManager activePage={activePage} />
+      <CookieConsentManager />
       
       {/* Scroll-Triggered Parallax Background Hieroglyphs */}
       <div className="absolute inset-y-0 left-0 right-0 pointer-events-none overflow-hidden select-none z-0">

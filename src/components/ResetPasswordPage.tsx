@@ -105,15 +105,15 @@ export default function ResetPasswordPage({ onLoginSuccess, onNavigate }: ResetP
             <KeyRound className="w-8 h-8 text-[#d4af37]" />
           </div>
           <span className="text-[10px] font-mono text-[#d4af37] uppercase tracking-[0.25em] block font-bold">
-            Sacred Key Restoration
+            Password Recovery
           </span>
           <h2 className="font-serif text-3xl font-black text-[#e6c280] uppercase tracking-wider">
             Reset Password
           </h2>
           <p className="text-xs font-sans text-stone-400">
             {step === 1
-              ? "Enter your email address to receive a sacred verification pin code."
-              : "Enter the verification pin code and your new password below."}
+              ? "Enter your email address to receive a verification PIN code."
+              : "Enter the verification PIN code and your new password below."}
           </p>
         </div>
 
