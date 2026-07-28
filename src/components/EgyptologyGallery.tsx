@@ -54,12 +54,8 @@ export default function EgyptologyGallery() {
   const [communityPhotos, setCommunityPhotos] = useState<any[]>([]);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState<boolean>(true);
 
-  // Camera & Image Capture States
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  // Gallery Image Upload State
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Form Submission States
   const [authorName, setAuthorName] = useState<string>('');
@@ -108,65 +104,6 @@ export default function EgyptologyGallery() {
   useEffect(() => {
     fetchPhotos();
   }, []);
-
-  // Bind video element to camera stream
-  useEffect(() => {
-    if (videoRef.current && cameraStream) {
-      videoRef.current.srcObject = cameraStream;
-    }
-  }, [cameraStream]);
-
-  // Cleanup stream on unmount
-  useEffect(() => {
-    return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [cameraStream]);
-
-  // Summon webcam camera stream
-  const startCamera = async () => {
-    setCameraError(null);
-    setIsCameraActive(true);
-    setCapturedImage(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false
-      });
-      setCameraStream(stream);
-    } catch (err: any) {
-      console.error("Webcam media stream retrieval failed:", err);
-      setCameraError("Summoning camera failed. Please verify browser permissions, or drag-and-drop a photo directly below.");
-    }
-  };
-
-  // Close webcam stream
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setIsCameraActive(false);
-  };
-
-  // Capture image snapshot from active video stream
-  const capturePhoto = () => {
-    if (videoRef.current) {
-      const video = videoRef.current;
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        setCapturedImage(dataUrl);
-        stopCamera();
-      }
-    }
-  };
 
   // Process standard file upload click
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,12 +293,12 @@ export default function EgyptologyGallery() {
             Public Travel Board
           </h3>
           <p className="text-stone-400 text-xs max-w-lg mx-auto">
-            Immortalize your journey under Ra's sky. Capture a live photo through your camera or select an expedition portrait to pin to our community board.
+            Immortalize your journey under Ra's sky. Select or drag & drop an expedition photo from your gallery to pin to our community board.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* LEFT: PHOTO INSCRIBER FORM & CAMERA VIEWER */}
+          {/* LEFT: PHOTO INSCRIBER FORM & GALLERY UPLOADER */}
           <div className="lg:col-span-5 bg-[#17120e] border border-[#d4af37]/25 rounded-3xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-3 opacity-[0.03] text-8xl font-serif select-none pointer-events-none">
               𓂀
@@ -369,14 +306,14 @@ export default function EgyptologyGallery() {
 
             <div className="space-y-1">
               <h4 className="font-serif text-base font-bold text-[#e6c280] uppercase tracking-wider flex items-center gap-2">
-                <Camera className="w-4 h-4 text-[#d4af37]" /> Inscribe Thy Voyage
+                <Upload className="w-4 h-4 text-[#d4af37]" /> Upload Voyage Photo
               </h4>
               <p className="text-stone-400 text-[11px] leading-relaxed">
-                Render a visual seal of your sacred journey across Egypt.
+                Choose a photo from your device's photo gallery to share on our board.
               </p>
             </div>
 
-            {/* Interactive Camera Screen OR Captured Preview Box */}
+            {/* Gallery Upload Box / Drag & Drop Area */}
             <div 
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -389,34 +326,7 @@ export default function EgyptologyGallery() {
                     : 'border-[#d4af37]/20 bg-stone-950/60'
               }`}
             >
-              {isCameraActive ? (
-                /* Live Camera Video Feed */
-                <div className="w-full h-full relative">
-                  <video 
-                    ref={videoRef}
-                    autoPlay 
-                    playsInline 
-                    id="camera-preview"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2.5 z-10">
-                    <button
-                      type="button"
-                      onClick={capturePhoto}
-                      className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] text-[#140f0a] font-serif font-black text-[11px] uppercase tracking-widest px-4 py-2 rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" /> Capture Seal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={stopCamera}
-                      className="bg-stone-900/90 border border-stone-850 hover:bg-stone-800 text-stone-300 font-mono text-[10px] uppercase tracking-wider px-3.5 py-2 rounded-xl cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : capturedImage ? (
+              {capturedImage ? (
                 /* Captured Image Preview and Redo trigger */
                 <div className="w-full h-full relative">
                   <img 
@@ -426,52 +336,40 @@ export default function EgyptologyGallery() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCapturedImage(null)}
-                      className="bg-stone-900/95 border border-stone-800 hover:border-[#d4af37]/40 text-[#e6c280] font-mono text-[9px] uppercase tracking-widest py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center gap-1"
-                    >
-                      <RefreshCw className="w-3 h-3 text-[#d4af37]" /> Redo Image
-                    </button>
+                    <label className="bg-stone-900/95 border border-stone-800 hover:border-[#d4af37]/40 text-[#e6c280] font-mono text-[9px] uppercase tracking-widest py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 text-[#d4af37]" /> Change Photo
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleFileUpload} 
+                        className="hidden" 
+                      />
+                    </label>
                   </div>
                   <div className="absolute top-3 left-3 bg-emerald-950/90 border border-emerald-500/40 text-emerald-400 font-mono text-[9px] uppercase tracking-widest px-2.5 py-1 rounded-md flex items-center gap-1">
                     <Check className="w-3 h-3" /> Ready
                   </div>
                 </div>
               ) : (
-                /* Empty state / summoning state */
+                /* Empty / Upload State */
                 <div className="p-6 text-center space-y-4">
-                  <div className="w-14 h-14 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/20 flex items-center justify-center mx-auto text-[#d4af37] animate-pulse">
-                    <Camera className="w-6 h-6" />
+                  <div className="w-14 h-14 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/20 flex items-center justify-center mx-auto text-[#d4af37]">
+                    <Image className="w-6 h-6" />
                   </div>
                   
                   <div className="space-y-1">
                     <p className="text-xs text-stone-200 font-medium font-serif uppercase tracking-wider">
-                      Summon the Sacred Mirror
+                      Select Photo from Gallery
                     </p>
                     <p className="text-[10px] text-stone-400 max-w-xs mx-auto">
-                      Click below to capture from your camera, or drag & drop a file directly in this zone!
+                      Click below to choose an image file from your photo library, or drop it here directly.
                     </p>
                   </div>
 
-                  {cameraError && (
-                    <p className="text-[10px] text-red-400 font-mono leading-relaxed max-w-[240px] mx-auto">
-                      {cameraError}
-                    </p>
-                  )}
-
-                  <div className="flex flex-wrap items-center justify-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={startCamera}
-                      className="bg-[#1f1914] hover:bg-[#2e241b] border border-[#d4af37]/40 text-[#e6c280] font-mono text-[10px] uppercase tracking-widest px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-[#d4af37]" /> Open Camera
-                    </button>
-
-                    <label className="bg-stone-900 hover:bg-stone-850 border border-stone-800 text-stone-400 font-mono text-[10px] uppercase tracking-widest px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5">
-                      <Upload className="w-3.5 h-3.5 text-stone-500" />
-                      <span>Select File</span>
+                  <div className="flex justify-center">
+                    <label className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-black text-[10px] uppercase tracking-widest px-5 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-lg">
+                      <Upload className="w-4 h-4" />
+                      <span>Choose Photo from Gallery</span>
                       <input 
                         type="file" 
                         accept="image/*" 

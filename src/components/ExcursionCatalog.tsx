@@ -1837,7 +1837,8 @@ Please seal my booking with the High Priest approval!`;
                   setSelectedExcursion(null);
                   setIsBookingOpen(false);
                 }}
-                className="absolute top-4 right-4 bg-stone-900 border border-stone-800 text-stone-400 hover:text-white p-2 rounded-full transition-colors cursor-pointer"
+                aria-label="Close excursion details"
+                className="absolute top-4 right-4 bg-stone-900 border border-stone-800 text-stone-400 hover:text-white p-2 rounded-full transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
               >
                 <X className="w-5 h-5" />
               </button>

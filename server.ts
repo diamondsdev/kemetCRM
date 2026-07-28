@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { processBookingEmailsAndSheet, sendNewsletterWelcomeEmail } from "./server/googleWorkspace";
@@ -308,7 +309,69 @@ interface DatabaseSchema {
   community_photos?: any[];
   ancient_sites?: any[];
   users?: any[];
+  crm_profiles?: any[];
 }
+
+const SEED_CRM_PROFILES = [
+  {
+    id: "crm-1",
+    name: "Cleopatra the Diver",
+    email: "cleo.ocean@royal-kemet.com",
+    vipTier: "Royal Prince",
+    leadStatus: "Deposited Pilgrim",
+    totalSpend: 1420,
+    inquiriesCount: 6,
+    lastActive: "2026-07-28",
+    leadScore: 92,
+    scribeNotes: "Prefers VIP yacht charters in Ras Mohammed with private Egyptologist-diver. Requested gourmet Bedouin seafood lunch.",
+    phone: "+201012345678",
+    whatsapp: "+201012345678",
+    preferredLanguage: "English",
+    tags: ["Scuba Diver", "VIP Royal", "Ras Mohammed"],
+    activityTimeline: [
+      { id: "act-1", type: "booking", title: "Booked Ras Mohammed Royal Coral Diving", date: "2026-07-20", details: "$240 deposit paid" },
+      { id: "act-2", type: "note", title: "Scribe Note Added", date: "2026-07-22", details: "Confirmed private boat upgrade" }
+    ]
+  },
+  {
+    id: "crm-2",
+    name: "Ramses the Nomad",
+    email: "ramses.great@deshret-safaris.org",
+    vipTier: "Pharaoh",
+    leadStatus: "Eternal Royal Traveler",
+    totalSpend: 2890,
+    inquiriesCount: 12,
+    lastActive: "2026-07-27",
+    leadScore: 98,
+    scribeNotes: "Repeat customer. Has completed 4 quad safaris in Hurghada and Luxor day trips. Very high budget.",
+    phone: "+201098765432",
+    whatsapp: "+201098765432",
+    preferredLanguage: "Arabic",
+    tags: ["Desert Safari", "Repeat Traveler", "High Budget"],
+    activityTimeline: [
+      { id: "act-3", type: "booking", title: "Booked Set's Golden Deshret Safari", date: "2026-07-22", details: "$225 paid for 3 guests" }
+    ]
+  },
+  {
+    id: "crm-3",
+    name: "Amelia & Mark Vance",
+    email: "vance.travelers@world.com",
+    vipTier: "High Priest",
+    leadStatus: "Warm Prospect",
+    totalSpend: 450,
+    inquiriesCount: 3,
+    lastActive: "2026-07-26",
+    leadScore: 74,
+    scribeNotes: "Inquired via Scribe Oracle regarding Nile felucca sunset cruise and Valley of the Kings family packages.",
+    phone: "+447700900077",
+    whatsapp: "+447700900077",
+    preferredLanguage: "English",
+    tags: ["Family Group", "Nile Cruise", "Luxor"],
+    activityTimeline: [
+      { id: "act-4", type: "inquiry", title: "Inquired via AI Scribe Oracle", date: "2026-07-26", details: "Asked for Luxor family itinerary" }
+    ]
+  }
+];
 
 const DB_FILE_PATH = path.join(process.cwd(), "kemet_db.json");
 const DB_FILE_FALLBACK_PATH = "/tmp/kemet_db.json";
@@ -367,10 +430,43 @@ function loadDb(): DatabaseSchema {
 
 function saveDb(data: DatabaseSchema) {
   try {
-    fs.writeFileSync(activeDbPath, JSON.stringify(data, null, 2), 'utf8');
+    const tempPath = `${activeDbPath}.tmp.${Date.now()}`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tempPath, activeDbPath);
   } catch (err) {
-    console.error("Failed to commit changes to the persistent database file:", err);
+    console.error("Failed to commit changes atomically to the persistent database file:", err);
+    try {
+      fs.writeFileSync(activeDbPath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (fallbackErr) {
+      console.error("Fallback saveDb error:", fallbackErr);
+    }
   }
+}
+
+// Password hashing & verification with Node crypto PBKDF2
+function hashPassword(password: string): { hash: string; salt: string } {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  return { hash, salt };
+}
+
+function verifyPassword(password: string, storedHash: string, storedSalt?: string): boolean {
+  if (!storedSalt) {
+    // Backwards compatibility for plain text legacy passwords
+    return password === storedHash;
+  }
+  const hash = crypto.pbkdf2Sync(password, storedSalt, 10000, 64, 'sha512').toString('hex');
+  return hash === storedHash;
+}
+
+// User session token storage
+const activeUserSessions = new Map<string, { userId: string; expiresAt: number }>();
+
+function createSessionForUser(userId: string): { token: string; expiresAt: number } {
+  const token = `usr-tok-${crypto.randomBytes(24).toString('hex')}`;
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+  activeUserSessions.set(token, { userId, expiresAt });
+  return { token, expiresAt };
 }
 
 // ==========================================
@@ -403,6 +499,16 @@ function getAI(): GoogleGenAI {
 // Memory store for API Rate Limiting to prevent brute-force or AI API abuse
 const rateLimitStore = new Map<string, { count: number, resetTime: number }>();
 
+// Periodic rate limit store cleanup every 10 minutes to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, info] of rateLimitStore.entries()) {
+    if (now > info.resetTime) {
+      rateLimitStore.delete(ip);
+    }
+  }
+}, 10 * 60 * 1000).unref();
+
 function apiRateLimiter(maxRequests: number, windowMs: number) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
@@ -430,9 +536,26 @@ function apiRateLimiter(maxRequests: number, windowMs: number) {
 function securityHeaders(req: express.Request, res: express.Response, next: express.NextFunction) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https: blob:; font-src 'self' https: data:; connect-src 'self' https: wss:; frame-ancestors 'self' *;");
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), display-capture=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self' https: data:; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; " +
+    "style-src 'self' 'unsafe-inline' https:; " +
+    "img-src 'self' data: https: blob:; " +
+    "font-src 'self' data: https:; " +
+    "connect-src 'self' https: wss: ws:; " +
+    "frame-src 'self' https:; " +
+    "frame-ancestors 'self' *; " +
+    "object-src 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self';"
+  );
   next();
 }
 
@@ -491,6 +614,80 @@ async function startServer() {
   app.use(express.json({ limit: "15mb" }));
   app.use(express.urlencoded({ limit: "15mb", extended: true }));
   app.use(securityHeaders);
+
+  // Global Rate Limiting Middleware for all API endpoints (120 requests / min / IP)
+  const globalApiLimiter = apiRateLimiter(120, 60 * 1000);
+  app.use("/api", globalApiLimiter);
+
+  // ==========================================
+  // SEO SITEMAP & ROBOTS GENERATOR
+  // ==========================================
+  app.get("/sitemap.xml", (req, res) => {
+    try {
+      const db = loadDb();
+      const host = req.get('host') || 'kemet-tours.com';
+      const protocol = req.protocol || 'https';
+      const baseUrl = `${protocol}://${host}`;
+      const today = new Date().toISOString().split('T')[0];
+
+      const staticPages = [
+        { url: '/', priority: '1.0', changefreq: 'daily' },
+        { url: '/#tours', priority: '0.9', changefreq: 'daily' },
+        { url: '/#map', priority: '0.8', changefreq: 'weekly' },
+        { url: '/#scribe', priority: '0.8', changefreq: 'weekly' },
+        { url: '/#gallery', priority: '0.7', changefreq: 'monthly' },
+        { url: '/#cartouche', priority: '0.7', changefreq: 'monthly' },
+        { url: '/#faq', priority: '0.6', changefreq: 'monthly' },
+        { url: '/#bookings', priority: '0.8', changefreq: 'daily' },
+      ];
+
+      const excursionPages = (db.excursions || []).map((ex: any) => ({
+        url: `/#excursion-${ex.id}`,
+        priority: '0.85',
+        changefreq: 'weekly',
+        title: ex.title,
+        description: ex.description
+      }));
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+${staticPages.map(page => `  <url>
+    <loc>${baseUrl}${page.url}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
+  </url>`).join('\n')}
+${excursionPages.map((ex: any) => `  <url>
+    <loc>${baseUrl}${ex.url}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${ex.changefreq}</changefreq>
+    <priority>${ex.priority}</priority>
+  </url>`).join('\n')}
+</urlset>`;
+
+      res.header('Content-Type', 'application/xml');
+      res.send(xml);
+    } catch (err) {
+      console.error("Sitemap generation error:", err);
+      res.status(500).send("Error generating sitemap");
+    }
+  });
+
+  app.get("/robots.txt", (req, res) => {
+    const host = req.get('host') || 'kemet-tours.com';
+    const protocol = req.protocol || 'https';
+    const content = `User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+Sitemap: ${protocol}://${host}/sitemap.xml
+`;
+    res.header('Content-Type', 'text/plain');
+    res.send(content);
+  });
 
   // ==========================================
   // SYSTEM API ENDPOINTS
@@ -786,6 +983,10 @@ async function startServer() {
         return res.status(400).json({ error: "Name, email and password are required to register a royal account." });
       }
 
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters long." });
+      }
+
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         return res.status(400).json({ error: "Please enter a valid email address." });
@@ -799,11 +1000,15 @@ async function startServer() {
         return res.status(400).json({ error: "An account with this email already exists. Please log in instead." });
       }
 
+      const { hash, salt } = hashPassword(password);
+      const userId = `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
       const newUser = {
-        id: `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: userId,
         name: sanitizeString(name, 100),
         email: sanitizeString(email, 100).toLowerCase(),
-        password: sanitizeString(password, 100),
+        password: hash,
+        salt: salt,
         phone: sanitizeString(phone, 40),
         whatsapp: sanitizeString(whatsapp, 40),
         hotelName: sanitizeString(hotelName, 120),
@@ -815,8 +1020,9 @@ async function startServer() {
       db.users.push(newUser);
       saveDb(db);
 
-      const { password: _, ...userSafe } = newUser;
-      res.json({ success: true, user: userSafe });
+      const session = createSessionForUser(userId);
+      const { password: _, salt: __, ...userSafe } = newUser;
+      res.json({ success: true, user: userSafe, token: session.token, expiresAt: session.expiresAt });
     } catch (err: any) {
       console.error("Auth register error:", err);
       res.status(500).json({ error: "Failed to register account." });
@@ -833,13 +1039,27 @@ async function startServer() {
       const db = loadDb();
       if (!db.users) db.users = [];
 
-      const user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password);
+      const user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase());
       if (!user) {
         return res.status(401).json({ error: "Invalid email or password. Please verify your credentials." });
       }
 
-      const { password: _, ...userSafe } = user;
-      res.json({ success: true, user: userSafe });
+      const isMatch = verifyPassword(password, user.password, user.salt);
+      if (!isMatch) {
+        return res.status(401).json({ error: "Invalid email or password. Please verify your credentials." });
+      }
+
+      // Upgrade legacy unhashed password to salted hash on successful login
+      if (!user.salt) {
+        const { hash, salt } = hashPassword(password);
+        user.password = hash;
+        user.salt = salt;
+        saveDb(db);
+      }
+
+      const session = createSessionForUser(user.id);
+      const { password: _, salt: __, ...userSafe } = user;
+      res.json({ success: true, user: userSafe, token: session.token, expiresAt: session.expiresAt });
     } catch (err: any) {
       console.error("Auth login error:", err);
       res.status(500).json({ error: "Failed to authenticate." });
@@ -870,7 +1090,7 @@ async function startServer() {
       res.json({
         success: true,
         message: "Sacred verification code generated and sent to your email.",
-        demoPin: pin // Shared in response so user can test reset immediately without email setup
+        demoPin: pin
       });
     } catch (err: any) {
       console.error("Auth request-reset error:", err);
@@ -885,8 +1105,8 @@ async function startServer() {
         return res.status(400).json({ error: "Email and new password are required." });
       }
 
-      if (newPassword.length < 4) {
-        return res.status(400).json({ error: "Password must be at least 4 characters long." });
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters long." });
       }
 
       const db = loadDb();
@@ -901,12 +1121,18 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid verification code. Please check your code or request a new one." });
       }
 
-      user.password = sanitizeString(newPassword, 100);
+      if (user.resetPinExpiry && Date.now() > user.resetPinExpiry) {
+        return res.status(400).json({ error: "Verification code has expired. Please request a new code." });
+      }
+
+      const { hash, salt } = hashPassword(newPassword);
+      user.password = hash;
+      user.salt = salt;
       delete user.resetPin;
       delete user.resetPinExpiry;
       saveDb(db);
 
-      const { password: _, ...userSafe } = user;
+      const { password: _, salt: __, ...userSafe } = user;
       res.json({ success: true, user: userSafe, message: "Password updated successfully!" });
     } catch (err: any) {
       console.error("Auth reset-password error:", err);
@@ -1449,6 +1675,178 @@ CRITICAL: Whenever you confirm or record a booking for the traveler, you MUST ap
       res.status(500).json({ 
         error: error.message || "Failed to consult the Oracle. Please check your Gemini API key." 
       });
+    }
+  });
+
+  // ==========================================
+  // SEO SITEMAP & ROBOTS ENDPOINTS
+  // ==========================================
+  app.get("/sitemap.xml", (req, res) => {
+    const db = loadDb();
+    const baseUrl = "https://kemet-excursions.app";
+    const excursionsXml = (db.excursions || []).map(ex => `
+  <url>
+    <loc>${baseUrl}/#excursion-${ex.id}</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`).join('');
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${baseUrl}/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/#excursions</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/#planner</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/#reviews</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>${excursionsXml}
+</urlset>`;
+
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  });
+
+  app.get("/robots.txt", (req, res) => {
+    const robots = `User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/admin/
+Sitemap: https://kemet-excursions.app/sitemap.xml`;
+    res.header('Content-Type', 'text/plain');
+    res.send(robots);
+  });
+
+  // ==========================================
+  // CRM CLIENTS & PROFILES API ENDPOINTS
+  // ==========================================
+  app.get("/api/crm/profiles", adminAuth, (req, res) => {
+    const db = loadDb();
+    if (!db.crm_profiles || db.crm_profiles.length === 0) {
+      db.crm_profiles = SEED_CRM_PROFILES;
+      saveDb(db);
+    }
+    res.json(db.crm_profiles);
+  });
+
+  app.post("/api/crm/profiles", adminAuth, (req, res) => {
+    try {
+      const { name, email, phone, whatsapp, vipTier, leadStatus, scribeNotes, tags } = req.body;
+      if (!name || !email) {
+        return res.status(400).json({ error: "Name and email are required to create a CRM client profile." });
+      }
+
+      const db = loadDb();
+      if (!db.crm_profiles) db.crm_profiles = [];
+
+      const newProfile = {
+        id: `crm-${Date.now()}`,
+        name: sanitizeString(name, 100),
+        email: sanitizeString(email, 100).toLowerCase(),
+        phone: sanitizeString(phone, 40),
+        whatsapp: sanitizeString(whatsapp || phone, 40),
+        vipTier: sanitizeString(vipTier, 40) || "Pharaoh Pilgrim",
+        leadStatus: sanitizeString(leadStatus, 40) || "Active Inquiry",
+        totalSpend: 0,
+        inquiriesCount: 1,
+        lastActive: new Date().toISOString().split('T')[0],
+        leadScore: 75,
+        scribeNotes: sanitizeString(scribeNotes, 1000),
+        tags: Array.isArray(tags) ? tags.map(t => sanitizeString(t, 30)) : ["New Prospect"],
+        activityTimeline: [
+          {
+            id: `act-${Date.now()}`,
+            type: "created",
+            title: "CRM Profile Created",
+            date: new Date().toISOString().split('T')[0],
+            details: "Client profile manually added to High Priest CRM."
+          }
+        ]
+      };
+
+      db.crm_profiles.unshift(newProfile);
+      saveDb(db);
+      res.json(db.crm_profiles);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put("/api/crm/profiles/:id", adminAuth, (req, res) => {
+    try {
+      const { id } = req.params;
+      const db = loadDb();
+      if (!db.crm_profiles) db.crm_profiles = [];
+
+      const profile = db.crm_profiles.find(p => p.id === id);
+      if (!profile) {
+        return res.status(404).json({ error: "CRM client profile not found." });
+      }
+
+      const { name, email, phone, whatsapp, vipTier, leadStatus, scribeNotes, leadScore, tags } = req.body;
+      if (name) profile.name = sanitizeString(name, 100);
+      if (email) profile.email = sanitizeString(email, 100);
+      if (phone !== undefined) profile.phone = sanitizeString(phone, 40);
+      if (whatsapp !== undefined) profile.whatsapp = sanitizeString(whatsapp, 40);
+      if (vipTier) profile.vipTier = sanitizeString(vipTier, 40);
+      if (leadStatus) profile.leadStatus = sanitizeString(leadStatus, 40);
+      if (scribeNotes !== undefined) profile.scribeNotes = sanitizeString(scribeNotes, 1000);
+      if (leadScore !== undefined) profile.leadScore = Number(leadScore) || 50;
+      if (Array.isArray(tags)) profile.tags = tags.map(t => sanitizeString(t, 30));
+
+      profile.lastActive = new Date().toISOString().split('T')[0];
+
+      saveDb(db);
+      res.json(db.crm_profiles);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/crm/profiles/:id/notes", adminAuth, (req, res) => {
+    try {
+      const { id } = req.params;
+      const { note } = req.body;
+      if (!note) return res.status(400).json({ error: "Note content is required." });
+
+      const db = loadDb();
+      if (!db.crm_profiles) db.crm_profiles = [];
+
+      const profile = db.crm_profiles.find(p => p.id === id);
+      if (!profile) return res.status(404).json({ error: "Profile not found." });
+
+      const cleanNote = sanitizeString(note, 500);
+      profile.scribeNotes = profile.scribeNotes ? `${profile.scribeNotes}\n[${new Date().toISOString().split('T')[0]}]: ${cleanNote}` : cleanNote;
+      if (!profile.activityTimeline) profile.activityTimeline = [];
+      profile.activityTimeline.unshift({
+        id: `act-${Date.now()}`,
+        type: "note",
+        title: "Scribe Note Added",
+        date: new Date().toISOString().split('T')[0],
+        details: cleanNote
+      });
+
+      saveDb(db);
+      res.json(profile);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 

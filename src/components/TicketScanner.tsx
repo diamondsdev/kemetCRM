@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Camera, Upload, X, CheckCircle2, AlertTriangle, Sparkles, RefreshCw, QrCode, Search, HelpCircle } from 'lucide-react';
+import { Camera, Upload, X, CheckCircle2, AlertTriangle, Sparkles, RefreshCw, QrCode, Search, HelpCircle, Image } from 'lucide-react';
 import jsQR from 'jsqr';
 import { Booking } from '../types';
 
@@ -15,6 +15,7 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [activeTab, setActiveTab] = useState<'camera' | 'upload' | 'manual'>('camera');
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -32,9 +33,9 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
 
   const [verificationSuccess, setVerificationSuccess] = useState<boolean>(false);
   const [manualCode, setManualCode] = useState<string>('');
-  const [showManualInput, setShowManualInput] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // Active stream tracking
+  // Active camera stream & animation frame tracking
   const activeStreamRef = useRef<MediaStream | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
 
@@ -45,7 +46,6 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
       setScannedResult(null);
       setVerificationSuccess(false);
 
-      // Stop any existing stream
       stopCamera();
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -55,19 +55,19 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
       activeStreamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
-        videoRef.current.play();
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.play().catch(() => {});
       }
 
       setHasCameraPermission(true);
       setIsScanning(true);
     } catch (err: any) {
-      console.error('Sacred lens failed to capture vision:', err);
+      console.error('Camera stream access failed:', err);
       setHasCameraPermission(false);
       setScannerError(
         err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-          ? 'Divine lens permission was denied. Please allow camera access in your browser settings.'
-          : 'Unable to initialize the camera stream. Ensure no other application is using your camera.'
+          ? 'Camera permission was denied. You can allow camera access in browser settings or upload a QR image from your gallery below.'
+          : 'Unable to initialize camera stream. Ensure no other application is using your camera or upload a QR image below.'
       );
     }
   };
@@ -88,7 +88,7 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
     }
   };
 
-  // Scan frame by frame
+  // Frame scanner loop
   const scanFrame = () => {
     if (!isScanning) return;
 
@@ -109,26 +109,51 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
 
         if (code) {
           handleDecodedValue(code.data);
-          return; // Stop scanning after successful decode
+          return;
         }
       }
     }
 
-    // Continue loop if still scanning
     if (isScanning) {
       animationFrameIdRef.current = requestAnimationFrame(scanFrame);
     }
   };
 
+  // Trigger frame scanner loop when camera starts
+  useEffect(() => {
+    if (isScanning) {
+      animationFrameIdRef.current = requestAnimationFrame(scanFrame);
+    }
+    return () => {
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+      }
+    };
+  }, [isScanning]);
+
+  // Handle facing mode or tab changes
+  useEffect(() => {
+    if (activeTab === 'camera' && !scannedResult && !verificationSuccess) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    return () => {
+      stopCamera();
+    };
+  }, [facingMode, activeTab]);
+
+  const toggleFacingMode = () => {
+    setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
+  };
+
   // Process decoded QR text
   const handleDecodedValue = (text: string) => {
     stopCamera();
-    
     let parsedData: any = null;
     let matchedBooking: Booking | undefined = undefined;
 
     try {
-      // Attempt to parse standard Kemet ticket JSON
       const json = JSON.parse(text);
       if (json && json.ticketId) {
         parsedData = {
@@ -137,11 +162,9 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
           tour: json.tour || 'Sacred Expedition',
           issuedAt: json.issuedAt
         };
-        // Find matching booking
         matchedBooking = bookings.find(b => b.id === json.ticketId);
       }
     } catch (e) {
-      // If not JSON, check if raw text matches a booking ID directly
       const cleanText = text.trim();
       matchedBooking = bookings.find(b => b.id === cleanText || b.id.includes(cleanText));
       if (matchedBooking) {
@@ -160,36 +183,27 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
     });
   };
 
-  // Trigger frame scanner loop when camera starts
-  useEffect(() => {
-    if (isScanning) {
-      animationFrameIdRef.current = requestAnimationFrame(scanFrame);
-    }
-    return () => {
-      if (animationFrameIdRef.current) {
-        cancelAnimationFrame(animationFrameIdRef.current);
-      }
-    };
-  }, [isScanning]);
-
-  // Handle facing mode toggles
-  const toggleFacingMode = () => {
-    setFacingMode(prev => (prev === 'environment' ? 'user' : 'environment'));
+  // Drag and drop event handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
   };
 
-  // Start camera automatically on load if permission wasn't already blocked
-  useEffect(() => {
-    startCamera();
-    return () => {
-      stopCamera();
-    };
-  }, [facingMode]);
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      processImageFile(file);
+    }
+  };
 
   // Decode from file upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processImageFile = (file: File) => {
     setScannerError('');
     setScannedResult(null);
     setVerificationSuccess(false);
@@ -209,13 +223,20 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
           if (code) {
             handleDecodedValue(code.data);
           } else {
-            setScannerError('Could not locate any sacred QR glyph inside this image. Try another screenshot.');
+            setScannerError('Could not locate any sacred QR glyph inside this image. Please select another screenshot or type the code manually.');
           }
         }
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
   };
 
   // Handle manual code check-in
@@ -249,10 +270,8 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
       onVerifyCheckIn(scannedResult.matchedBooking.id);
       setVerificationSuccess(true);
       
-      // Dispatch a celebration event!
       window.dispatchEvent(new CustomEvent('kemet_celebrate'));
 
-      // Clean up after short delay
       setTimeout(() => {
         onClose();
       }, 3000);
@@ -276,7 +295,7 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
             Sacred Registrar Portal
           </h3>
           <span className="text-stone-500 font-mono text-[9px] uppercase tracking-widest px-1.5 py-0.5 bg-stone-900 border border-stone-800 rounded">
-            Check-In Scanner
+            QR Scanner
           </span>
         </div>
         <button
@@ -390,11 +409,11 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
                   <button
                     onClick={() => {
                       setScannedResult(null);
-                      startCamera();
+                      if (activeTab === 'camera') startCamera();
                     }}
                     className="border border-stone-700 text-stone-400 hover:text-white px-3 rounded-lg text-xs font-mono hover:bg-stone-900 transition-colors cursor-pointer"
                   >
-                    Retry Scan
+                    Scan Again
                   </button>
                 </div>
               </div>
@@ -407,7 +426,7 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
                   </span>
                 </div>
                 <p className="text-stone-300 text-xs leading-relaxed">
-                  The decoded matrix contains raw data, but does not match any current active expedition inside our local bookings ledger:
+                  The decoded QR code contains raw text, but does not match any booking in our active ledger:
                 </p>
                 <div className="bg-[#140e0a] rounded border border-stone-800 p-2 text-xs font-mono text-[#d4af37] break-all max-h-24 overflow-y-auto">
                   {scannedResult.rawText}
@@ -416,15 +435,14 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
                   <button
                     onClick={() => {
                       setScannedResult(null);
-                      startCamera();
+                      if (activeTab === 'camera') startCamera();
                     }}
                     className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg py-2 text-xs font-mono uppercase tracking-wider transition-all cursor-pointer"
                   >
-                    Scan Another Talisman
+                    Scan Another QR Code
                   </button>
                   <button
                     onClick={() => {
-                      // Attempt a manual match by trying to parse ticketId
                       if (scannedResult.parsedData?.ticketId) {
                         const directMatched = bookings.find(b => b.id === scannedResult.parsedData?.ticketId);
                         if (directMatched) {
@@ -447,84 +465,135 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
           </motion.div>
         )}
 
-        {/* Live Camera View and fallbacks */}
+        {/* Tab Selection Navigation */}
         {!verificationSuccess && !scannedResult && (
           <div className="space-y-4">
-            {/* The active viewport */}
-            <div className="relative aspect-video w-full max-w-md mx-auto bg-black rounded-xl overflow-hidden border border-stone-800 group">
-              {isScanning ? (
-                <>
-                  <video
-                    ref={videoRef}
-                    className="w-full h-full object-cover"
-                    playsInline
-                    muted
-                  />
-                  {/* Invisible canvas for analysis */}
-                  <canvas ref={canvasRef} className="hidden" />
-
-                  {/* Animated Pharaoh Scanner Overlay */}
-                  <div className="absolute inset-0 pointer-events-none border-2 border-transparent group-hover:border-[#d4af37]/20 transition-all flex items-center justify-center">
-                    {/* Retro-futuristic Egyptian grid target corners */}
-                    <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-[#d4af37]"></div>
-                    <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-[#d4af37]"></div>
-                    <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-[#d4af37]"></div>
-                    <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-[#d4af37]"></div>
-
-                    {/* Oscillating gold scanner laser line */}
-                    <motion.div
-                      animate={{ y: ['-100%', '100%'] }}
-                      transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
-                      className="absolute left-3 right-3 h-[2px] bg-gradient-to-r from-transparent via-[#d4af37] to-transparent shadow-[0_0_8px_rgba(212,175,55,0.8)]"
-                    />
-
-                    {/* Center scan area template */}
-                    <div className="w-32 h-32 border border-[#d4af37]/30 rounded-xl flex items-center justify-center bg-black/10">
-                      <QrCode className="w-12 h-12 text-[#d4af37]/20 animate-pulse" />
-                    </div>
-                  </div>
-
-                  {/* Quick toggle bar on top of video */}
-                  <div className="absolute top-2 right-2 flex gap-1.5 z-10">
-                    <button
-                      onClick={toggleFacingMode}
-                      className="p-1.5 bg-black/60 hover:bg-black/80 border border-stone-700 hover:border-[#d4af37]/40 text-stone-300 hover:text-[#d4af37] rounded-md text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1"
-                      title="Flip sacred lens camera orientation"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Flip</span>
-                    </button>
-                    <button
-                      onClick={stopCamera}
-                      className="p-1.5 bg-red-950/60 hover:bg-red-950/80 border border-red-900/60 text-red-400 rounded-md text-[10px] font-mono transition-all cursor-pointer"
-                      title="Turn camera off"
-                    >
-                      Pause
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center space-y-3 bg-[#110c09]">
-                  <Camera className="w-10 h-10 text-stone-600 animate-pulse" />
-                  <div>
-                    <p className="text-xs text-stone-400 font-medium font-sans">Camera is inactive or unavailable.</p>
-                    {scannerError && <p className="text-[10px] text-amber-500 font-mono mt-1 max-w-xs mx-auto">{scannerError}</p>}
-                  </div>
-                  <button
-                    onClick={startCamera}
-                    className="bg-[#d4af37]/10 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#fbf5e6] font-mono text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Camera className="w-3 h-3" />
-                    Activate Eye of Horus (Camera)
-                  </button>
-                </div>
-              )}
+            <div className="flex border-b border-stone-800 gap-1 pb-1">
+              <button
+                onClick={() => setActiveTab('camera')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-t-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+                  activeTab === 'camera'
+                    ? 'bg-[#241a10] text-[#e6c280] border-t-2 border-x border-[#d4af37]'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/50'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5 text-[#d4af37]" />
+                <span>Live Camera</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('upload')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-t-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+                  activeTab === 'upload'
+                    ? 'bg-[#241a10] text-[#e6c280] border-t-2 border-x border-[#d4af37]'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/50'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5 text-[#d4af37]" />
+                <span>Gallery Image</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('manual')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-t-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+                  activeTab === 'manual'
+                    ? 'bg-[#241a10] text-[#e6c280] border-t-2 border-x border-[#d4af37]'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/50'
+                }`}
+              >
+                <Search className="w-3.5 h-3.5 text-[#d4af37]" />
+                <span>Input Code</span>
+              </button>
             </div>
 
-            {/* Alternating tabs/options under camera */}
-            <div className="border-t border-stone-800/80 pt-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-              {/* Image Upload Fallback */}
-              <div className="w-full sm:w-auto">
+            {/* TAB 1: LIVE CAMERA VIEWPORT */}
+            {activeTab === 'camera' && (
+              <div className="space-y-3">
+                <div className="relative aspect-video w-full max-w-md mx-auto bg-black rounded-xl overflow-hidden border border-stone-800 group shadow-inner">
+                  {isScanning ? (
+                    <>
+                      <video
+                        ref={videoRef}
+                        className="w-full h-full object-cover"
+                        playsInline
+                        muted
+                      />
+                      <canvas ref={canvasRef} className="hidden" />
+
+                      {/* Golden Egyptian Target Overlay */}
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-[#d4af37]"></div>
+                        <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-[#d4af37]"></div>
+                        <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-[#d4af37]"></div>
+                        <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-[#d4af37]"></div>
+
+                        {/* Oscillating laser line */}
+                        <motion.div
+                          animate={{ y: ['-100%', '100%'] }}
+                          transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+                          className="absolute left-3 right-3 h-[2px] bg-gradient-to-r from-transparent via-[#d4af37] to-transparent shadow-[0_0_10px_rgba(212,175,55,0.9)]"
+                        />
+
+                        <div className="w-32 h-32 border border-[#d4af37]/40 rounded-xl flex items-center justify-center bg-black/10">
+                          <QrCode className="w-10 h-10 text-[#d4af37]/30 animate-pulse" />
+                        </div>
+                      </div>
+
+                      {/* Camera Overlay Controls */}
+                      <div className="absolute top-2 right-2 flex gap-1.5 z-10">
+                        <button
+                          type="button"
+                          onClick={toggleFacingMode}
+                          className="p-1.5 bg-black/70 hover:bg-black/90 border border-stone-700 hover:border-[#d4af37]/60 text-stone-200 hover:text-[#d4af37] rounded-md text-[10px] font-mono transition-all cursor-pointer flex items-center gap-1"
+                          title="Switch camera orientation"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Flip</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={stopCamera}
+                          className="p-1.5 bg-red-950/70 hover:bg-red-950/90 border border-red-900/60 text-red-300 rounded-md text-[10px] font-mono transition-all cursor-pointer"
+                        >
+                          Pause
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center space-y-3 bg-[#110c09]">
+                      <Camera className="w-10 h-10 text-stone-600 animate-pulse" />
+                      <div className="space-y-1">
+                        <p className="text-xs text-stone-300 font-medium">Camera is currently paused or inactive.</p>
+                        {scannerError && <p className="text-[10px] text-amber-400 font-mono max-w-xs mx-auto leading-relaxed">{scannerError}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-bold text-xs uppercase px-4 py-2 rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Start Camera Scan</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-stone-400 font-mono text-center">
+                  Point your camera directly at the booking ticket QR code to verify traveler passage.
+                </p>
+              </div>
+            )}
+
+            {/* TAB 2: GALLERY DROPZONE */}
+            {activeTab === 'upload' && (
+              <div 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`p-6 border-2 border-dashed rounded-2xl text-center space-y-3 cursor-pointer transition-all ${
+                  isDragging
+                    ? 'border-emerald-500 bg-emerald-950/20'
+                    : 'border-[#d4af37]/40 hover:border-[#d4af37] bg-black/40 hover:bg-black/60'
+                }`}
+              >
                 <input
                   type="file"
                   accept="image/*"
@@ -532,53 +601,64 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
                   onChange={handleImageUpload}
                   className="hidden"
                 />
+                <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#d4af37]">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <p className="font-serif text-sm uppercase tracking-wider text-[#e6c280] font-bold">
+                    Upload Ticket QR Image
+                  </p>
+                  <p className="text-xs text-stone-400 max-w-xs mx-auto">
+                    Select a saved QR screenshot or image file from your device's photo gallery
+                  </p>
+                </div>
+
+                {scannerError && (
+                  <p className="text-xs text-amber-400 font-mono bg-amber-950/30 border border-amber-500/30 rounded-lg p-2 max-w-sm mx-auto">
+                    {scannerError}
+                  </p>
+                )}
+
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-stone-700 rounded-lg text-xs font-mono text-stone-300 transition-colors cursor-pointer"
-                  title="Upload a saved ticket QR screenshot"
+                  type="button"
+                  className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-bold text-xs uppercase px-4 py-2 rounded-xl shadow-md transition-all pointer-events-none"
                 >
-                  <Upload className="w-3.5 h-3.5 text-[#d4af37]" />
-                  <span>Upload QR Screenshot</span>
+                  Choose Photo from Gallery
                 </button>
               </div>
+            )}
 
-              {/* Manual search toggle button */}
-              <button
-                onClick={() => setShowManualInput(!showManualInput)}
-                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-mono text-stone-400 hover:text-white hover:bg-stone-900 rounded-lg transition-all cursor-pointer"
-              >
-                <Search className="w-3.5 h-3.5 text-[#d4af37]" />
-                <span>{showManualInput ? 'Hide Manual Input' : 'Input Booking Code'}</span>
-              </button>
-            </div>
-
-            {/* Expanded manual inputs */}
-            {showManualInput && (
-              <motion.form
+            {/* TAB 3: MANUAL INPUT */}
+            {activeTab === 'manual' && (
+              <form
                 onSubmit={handleManualSearch}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="bg-[#140e0a] p-3 rounded-lg border border-stone-800/80 space-y-2"
+                className="bg-[#140e0a] p-4 rounded-xl border border-stone-800 space-y-3"
               >
-                <label className="text-[10px] font-mono uppercase text-stone-500 block">
-                  Verify by Booking ID code
+                <label className="text-xs font-serif uppercase tracking-wider text-[#e6c280] font-bold block flex items-center gap-1.5">
+                  <Search className="w-4 h-4 text-[#d4af37]" />
+                  <span>Verify Directly by Booking ID Code</span>
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
-                    placeholder="e.g. b-1784... or full ticket token"
-                    className="flex-1 bg-black/50 border border-stone-800 focus:border-[#d4af37] text-stone-100 text-xs rounded-lg px-3 py-1.5 focus:outline-none font-mono"
+                    placeholder="e.g. b-1784... or ticket token"
+                    className="flex-1 bg-black/60 border border-stone-800 focus:border-[#d4af37] text-stone-100 text-xs rounded-lg px-3 py-2.5 focus:outline-none font-mono"
                   />
                   <button
                     type="submit"
-                    className="bg-[#d4af37]/20 hover:bg-[#d4af37]/30 border border-[#d4af37]/50 text-[#fbf5e6] px-3.5 py-1.5 rounded-lg text-xs font-mono transition-all cursor-pointer"
+                    className="bg-[#d4af37] hover:bg-amber-300 text-[#140f0a] px-4 py-2.5 rounded-lg text-xs font-mono font-bold uppercase transition-all cursor-pointer"
                   >
                     Check Code
                   </button>
                 </div>
-              </motion.form>
+                {scannerError && (
+                  <p className="text-xs text-amber-400 font-mono bg-amber-950/30 border border-amber-500/30 rounded-lg p-2">
+                    {scannerError}
+                  </p>
+                )}
+              </form>
             )}
           </div>
         )}
@@ -593,3 +673,4 @@ export default function TicketScanner({ bookings, onVerifyCheckIn, onClose }: Ti
     </motion.div>
   );
 }
+

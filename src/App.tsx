@@ -1,25 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Compass, Sparkles, ScrollText, CalendarDays, Eye, BookOpen, Anchor, Map, Info, Sun, Moon, Globe, ChevronDown, User as UserIcon, LogIn, UserPlus } from 'lucide-react';
 import { Booking, User } from './types';
-import CartoucheGenerator from './components/CartoucheGenerator';
-import ScribeOracle from './components/ScribeOracle';
 import ExcursionCatalog, { EXCURSIONS_DATA } from './components/ExcursionCatalog';
-import EgyptologyGallery from './components/EgyptologyGallery';
 import BookingManager from './components/BookingManager';
-import AdminDashboard from './components/AdminDashboard';
 import FooterNewsletter from './components/FooterNewsletter';
 import OraclesWisdomFAQ from './components/OraclesWisdomFAQ';
 import MobileBottomNav from './components/MobileBottomNav';
 import ScarabCelebration from './components/ScarabCelebration';
 import PapyrusScrollCelebration from './components/PapyrusScrollCelebration';
-import AncientSitesMap from './components/AncientSitesMap';
-import LoginPage from './components/LoginPage';
-import RegisterPage from './components/RegisterPage';
-import ResetPasswordPage from './components/ResetPasswordPage';
-import UserProfilePage from './components/UserProfilePage';
+import SEOMetadataManager from './components/SEOMetadataManager';
+import SEOHelper from './components/SEOHelper';
 import { useLanguage } from './components/LanguageContext';
 import { getAccessToken } from './lib/firebaseAuth';
+
+// Lazy loaded heavy components for optimal page load speed
+const CartoucheGenerator = lazy(() => import('./components/CartoucheGenerator'));
+const ScribeOracle = lazy(() => import('./components/ScribeOracle'));
+const EgyptologyGallery = lazy(() => import('./components/EgyptologyGallery'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const AncientSitesMap = lazy(() => import('./components/AncientSitesMap'));
+const LoginPage = lazy(() => import('./components/LoginPage'));
+const RegisterPage = lazy(() => import('./components/RegisterPage'));
+const ResetPasswordPage = lazy(() => import('./components/ResetPasswordPage'));
+const UserProfilePage = lazy(() => import('./components/UserProfilePage'));
+
+const SacredLoader = () => (
+  <div className="flex flex-col items-center justify-center p-12 space-y-4 bg-[#140f0c]/60 border border-[#d4af37]/30 rounded-3xl backdrop-blur-md text-center my-8">
+    <div className="w-12 h-12 rounded-full border-2 border-t-[#d4af37] border-r-transparent border-b-[#d4af37]/40 border-l-transparent animate-spin flex items-center justify-center text-[#d4af37] text-xl">
+      𓋹
+    </div>
+    <span className="text-xs font-mono text-[#d4af37] uppercase tracking-[0.25em] animate-pulse">
+      Summoning Sacred Wisdom...
+    </span>
+  </div>
+);
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
@@ -497,6 +512,7 @@ export default function App() {
       id="app-root"
       style={theme === 'nile' ? { '--nile-bg-x': `${scrollY * 0.05}px` } as React.CSSProperties : undefined}
     >
+      <SEOMetadataManager activePage={activePage} />
       
       {/* Scroll-Triggered Parallax Background Hieroglyphs */}
       <div className="absolute inset-y-0 left-0 right-0 pointer-events-none overflow-hidden select-none z-0">
@@ -868,9 +884,10 @@ export default function App() {
         </nav>
 
         {/* MAIN BODY CONTENTS */}
-        <main className="max-w-7xl mx-auto px-4 md:px-6 py-12 relative" id="main-content-section">
+        <main className="max-w-7xl mx-auto px-4 md:px-6 py-12 relative" id="main-content-section" tabIndex={-1}>
           
-          <AnimatePresence mode="wait">
+          <Suspense fallback={<SacredLoader />}>
+            <AnimatePresence mode="wait">
             {activePage === 'tours' && (
                 <motion.div
                   key="tours"
@@ -1201,6 +1218,7 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
+          </Suspense>
 
         </main>
 

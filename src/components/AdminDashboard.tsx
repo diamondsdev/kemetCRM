@@ -42,7 +42,7 @@ import {
   QrCode,
   Printer
 } from 'lucide-react';
-import { Booking, Excursion, Review, ScribeMessage } from '../types';
+import { Booking, Excursion, Review, ScribeMessage, SecurityAuditLog } from '../types';
 import { useLanguage } from './LanguageContext';
 import { initAuth, googleSignIn, logout, getAccessToken } from '../lib/firebaseAuth';
 import { createKemetSpreadsheet, syncTablesToSpreadsheet, importExcursionsFromSpreadsheet, importBookingsFromSpreadsheet } from '../lib/googleSheets';
@@ -232,6 +232,59 @@ const INITIAL_CRM_PROFILES: TravelerCRMProfile[] = [
   }
 ];
 
+const INITIAL_SECURITY_LOGS: SecurityAuditLog[] = [
+  {
+    id: 'sec-log-101',
+    timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    eventType: 'AUTH_SANCTUARY_ACCESS',
+    action: 'High Priest Sanctuary Login Verified',
+    userRole: 'High Priest Admin',
+    ipAddress: '192.168.1.100 (Gateway)',
+    status: 'SUCCESS',
+    details: 'Verified with PBKDF2 token & admin passcode. Sanctuary vault unlocked.'
+  },
+  {
+    id: 'sec-log-102',
+    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    eventType: 'BOOKING_LEDGER_SYNC',
+    action: 'Caravan Status Confirmed',
+    userRole: 'High Priest Admin',
+    ipAddress: '192.168.1.100',
+    status: 'SUCCESS',
+    details: 'Booking #BK-9482 status updated to Confirmed. Confirmation scroll dispatched.'
+  },
+  {
+    id: 'sec-log-103',
+    timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    eventType: 'SHEETS_INTEGRATION_SYNC',
+    action: 'Google Sheets Divine Ledger Export',
+    userRole: 'High Priest Admin',
+    ipAddress: '192.168.1.100',
+    status: 'SUCCESS',
+    details: 'Synchronized active tables to Google Sheets.'
+  },
+  {
+    id: 'sec-log-104',
+    timestamp: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
+    eventType: 'CRM_PROFILE_MODIFIED',
+    action: 'Traveler CRM Scribe Notes Updated',
+    userRole: 'High Priest Admin',
+    ipAddress: '192.168.1.100',
+    status: 'SUCCESS',
+    details: 'Updated profile for Cleopatra the Diver (ID: crm-1).'
+  },
+  {
+    id: 'sec-log-105',
+    timestamp: new Date(Date.now() - 1000 * 60 * 720).toISOString(),
+    eventType: 'SECURITY_VAULT_LOCK',
+    action: 'Sanctuary Vault Locked & Token Revoked',
+    userRole: 'High Priest Admin',
+    ipAddress: '192.168.1.100',
+    status: 'REVOKED',
+    details: 'High Priest session locked manually. Admin passcode token purged.'
+  }
+];
+
 interface AdminDashboardProps {
   bookings: Booking[];
   onUpdateBookingStatus: (id: string, status: Booking['status']) => void;
@@ -240,7 +293,7 @@ interface AdminDashboardProps {
   onVerifyCheckIn?: (id: string) => void;
 }
 
-type CRMTab = 'dashboard' | 'caravans' | 'nobles' | 'offerings' | 'testimonies' | 'oracle' | 'subscribers' | 'sheets' | 'analytics';
+type CRMTab = 'dashboard' | 'caravans' | 'nobles' | 'offerings' | 'testimonies' | 'oracle' | 'subscribers' | 'sheets' | 'analytics' | 'security';
 
 export default function AdminDashboard({
   bookings,
@@ -252,6 +305,81 @@ export default function AdminDashboard({
   const { language, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<CRMTab>('dashboard');
   const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
+
+  // Security Audit Logs state
+  const [securityLogs, setSecurityLogs] = useState<SecurityAuditLog[]>(() => {
+    const saved = localStorage.getItem('kemet_security_audit_logs');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return INITIAL_SECURITY_LOGS;
+      }
+    }
+    return INITIAL_SECURITY_LOGS;
+  });
+  const [securitySearch, setSecuritySearch] = useState<string>('');
+  const [securityFilterStatus, setSecurityFilterStatus] = useState<string>('all');
+
+  const addSecurityAuditLog = (
+    eventType: string,
+    action: string,
+    status: 'SUCCESS' | 'WARNING' | 'REVOKED' | 'FAILED' = 'SUCCESS',
+    details: string = ''
+  ) => {
+    const newLog: SecurityAuditLog = {
+      id: `sec-log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString(),
+      eventType,
+      action,
+      userRole: 'High Priest Admin',
+      ipAddress: '192.168.1.100 (Gateway)',
+      status,
+      details
+    };
+    setSecurityLogs((prev) => {
+      const updated = [newLog, ...prev];
+      localStorage.setItem('kemet_security_audit_logs', JSON.stringify(updated.slice(0, 100)));
+      return updated;
+    });
+  };
+
+  const handleExportSecurityLogs = () => {
+    try {
+      const headers = ['Log_ID', 'Timestamp', 'Event_Type', 'Action', 'User_Role', 'IP_Address', 'Status', 'Details'];
+      const csvRows = [headers.join(',')];
+
+      securityLogs.forEach((log) => {
+        const row = [
+          `"${(log.id || '').replace(/"/g, '""')}"`,
+          `"${(log.timestamp || '').replace(/"/g, '""')}"`,
+          `"${(log.eventType || '').replace(/"/g, '""')}"`,
+          `"${(log.action || '').replace(/"/g, '""')}"`,
+          `"${(log.userRole || '').replace(/"/g, '""')}"`,
+          `"${(log.ipAddress || '').replace(/"/g, '""')}"`,
+          `"${(log.status || '').replace(/"/g, '""')}"`,
+          `"${(log.details || '').replace(/"/g, '""')}"`
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvRows.join('\n'));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', csvContent);
+      const dateStr = new Date().toISOString().split('T')[0];
+      downloadAnchor.setAttribute('download', `kemet_security_audit_logs_${dateStr}.csv`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+
+      triggerNotification("Security audit logs exported to CSV successfully!");
+
+      addSecurityAuditLog('SECURITY_AUDIT_EXPORT', 'Exported Security Audit Logs CSV', 'SUCCESS', `Exported ${securityLogs.length} audit log entries.`);
+    } catch (err: any) {
+      console.error("Export security logs failed:", err);
+      triggerNotification("Failed to export security logs");
+    }
+  };
 
   // Google Sheets integration state
   const [gUser, setGUser] = useState<any>(null);
@@ -1729,16 +1857,20 @@ export default function AdminDashboard({
         localStorage.setItem('kemet_admin_unlocked', 'true');
         localStorage.setItem('kemet_admin_passcode', code);
         setIsAdminUnlocked(true);
+        addSecurityAuditLog('AUTH_SANCTUARY_ACCESS', 'High Priest Sanctuary Access Granted', 'SUCCESS', 'Authenticated with High Priest passcode.');
       } else {
         setAdminPasscodeError('Invalid High Priest Passcode. Verification failed.');
+        addSecurityAuditLog('AUTH_SANCTUARY_ACCESS', 'High Priest Sanctuary Access Failed', 'FAILED', 'Failed passcode verification attempt.');
       }
     } catch (err) {
       if (['pharaoh', 'pharaoh2026', 'kemet-admin-2026'].includes(code.toLowerCase())) {
         localStorage.setItem('kemet_admin_unlocked', 'true');
         localStorage.setItem('kemet_admin_passcode', code);
         setIsAdminUnlocked(true);
+        addSecurityAuditLog('AUTH_SANCTUARY_ACCESS', 'High Priest Sanctuary Access Granted (Fallback)', 'SUCCESS', 'Authenticated with High Priest passcode fallback.');
       } else {
         setAdminPasscodeError('Verification error or invalid passcode.');
+        addSecurityAuditLog('AUTH_SANCTUARY_ACCESS', 'High Priest Sanctuary Access Failed', 'FAILED', 'Invalid passcode entered.');
       }
     } finally {
       setIsVerifyingPasscode(false);
@@ -1746,6 +1878,7 @@ export default function AdminDashboard({
   };
 
   const handleLockAdminDashboard = () => {
+    addSecurityAuditLog('SECURITY_VAULT_LOCK', 'High Priest Sanctuary Vault Locked', 'REVOKED', 'Session locked manually by High Priest.');
     localStorage.removeItem('kemet_admin_unlocked');
     localStorage.removeItem('kemet_admin_passcode');
     setIsAdminUnlocked(false);
@@ -1895,6 +2028,16 @@ export default function AdminDashboard({
           </div>
 
           <button
+            onClick={handleExportSecurityLogs}
+            className="bg-[#1e1711] hover:bg-[#2c2117] text-[#e6c280] border border-[#d4af37]/40 font-serif font-bold text-xs uppercase tracking-wider px-3.5 py-2.5 rounded-xl shadow-md flex items-center gap-2 cursor-pointer transition-all hover:border-[#d4af37] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+            title="Download audit trail of all administrative actions in CSV format"
+            aria-label="Export Security Audit Logs in CSV format"
+          >
+            <Download className="w-4 h-4 text-[#d4af37]" />
+            <span>Export Security Logs</span>
+          </button>
+
+          <button
             onClick={() => setIsScannerOpen(true)}
             className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-black text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl shadow-md flex items-center gap-2 cursor-pointer transition-all border border-[#d4af37]"
           >
@@ -1944,7 +2087,7 @@ export default function AdminDashboard({
       </div>
 
       {/* CRM Navigation Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-stone-800 pb-4">
+      <div className="flex flex-wrap gap-2 border-b border-stone-800 pb-4" role="tablist" aria-label="Admin Dashboard Navigation">
         {[
           { key: 'dashboard', label: t('admin_label_dashboard', '📊 Command Dashboard'), desc: t('admin_desc_dashboard', 'Financial & Lead funnels') },
           { key: 'caravans', label: t('admin_label_caravans', '𓎬 Caravan Ledger'), desc: `${bookings.length} ${t('admin_active_bookings', 'active bookings')}` },
@@ -1954,16 +2097,30 @@ export default function AdminDashboard({
           { key: 'oracle', label: t('admin_label_oracle', '𓋹 Oracle Lead Logs'), desc: t('admin_desc_oracle', 'Inspect recent chats') },
           { key: 'subscribers', label: t('admin_label_subscribers', '𓇚 Imperial Scrolls'), desc: `${subscribers.length} ${t('admin_newsletter_signups', 'newsletter signups')}` },
           { key: 'sheets', label: t('admin_label_sheets', '𓇛 Google Sheets Sync'), desc: t('admin_desc_sheets', 'Sync divine ledgers') },
-          { key: 'analytics', label: '📈 Booking Analytics', desc: 'Divine Recharts' }
+          { key: 'analytics', label: '📈 Booking Analytics', desc: 'Divine Recharts' },
+          { key: 'security', label: '🛡️ Security Logs', desc: `${securityLogs.length} audit entries` }
         ].map((tab) => (
           <button
             key={tab.key}
+            id={`tab-${tab.key}`}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`panel-${tab.key}`}
+            tabIndex={activeTab === tab.key ? 0 : -1}
             onClick={() => {
               setActiveTab(tab.key as CRMTab);
               setEditingProfile(null);
               setEditingExcursion(null);
             }}
-            className={`px-4 py-3 rounded-xl transition-all duration-300 text-left cursor-pointer border flex flex-col justify-between ${
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setActiveTab(tab.key as CRMTab);
+                setEditingProfile(null);
+                setEditingExcursion(null);
+              }
+            }}
+            className={`px-4 py-3 rounded-xl transition-all duration-300 text-left cursor-pointer border flex flex-col justify-between focus:outline-none focus:ring-2 focus:ring-[#d4af37] ${
               activeTab === tab.key
                 ? 'bg-gradient-to-b from-[#2a2016] to-[#1c140e] border-[#d4af37] text-[#f3e5c8] shadow-md shadow-[#d4af37]/5'
                 : 'bg-[#15110d]/50 border-transparent text-stone-400 hover:text-[#e6c280] hover:bg-[#1f1913]/40'
@@ -4078,6 +4235,139 @@ export default function AdminDashboard({
             animate={{ opacity: 1 }}
           >
             <BookingAnalytics bookings={bookings} excursions={excursions} />
+          </motion.div>
+        )}
+
+        {/* TAB 10: SECURITY AUDIT TRAIL LOGS */}
+        {activeTab === 'security' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="space-y-6"
+          >
+            {/* Header / Summary bar */}
+            <div className="bg-[#16110d] border border-[#d4af37]/30 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-[#d4af37]" />
+                  <span className="text-xs font-mono uppercase tracking-widest text-[#d4af37] font-bold">
+                    Sacred Security Audit Vault
+                  </span>
+                </div>
+                <h3 className="font-serif text-xl font-bold text-[#f3e5c8] mt-1">
+                  High Priest Administrative Audit Trail
+                </h3>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  Real-time recording of all system access, ledger modifications, and administrative security actions.
+                </p>
+              </div>
+
+              <button
+                onClick={handleExportSecurityLogs}
+                className="bg-gradient-to-r from-[#d4af37] to-[#b08e23] hover:from-[#fbf5e6] hover:to-[#d4af37] text-[#140f0a] font-serif font-black text-xs uppercase tracking-widest px-5 py-3 rounded-xl shadow-lg flex items-center gap-2 cursor-pointer transition-all border border-[#d4af37] focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+                aria-label="Export Security Audit Logs to CSV file"
+              >
+                <Download className="w-4 h-4" />
+                <span>Export Security Logs (CSV)</span>
+              </button>
+            </div>
+
+            {/* Filter controls */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#14100c] border border-stone-800 p-4 rounded-2xl">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-stone-500 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  value={securitySearch}
+                  onChange={(e) => setSecuritySearch(e.target.value)}
+                  placeholder="Filter logs by event, action, or details..."
+                  className="w-full bg-[#1c1611] border border-stone-800 rounded-xl pl-9 pr-3 py-2 text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Filter className="w-4 h-4 text-[#d4af37]" />
+                <span className="text-xs font-mono text-stone-400 uppercase">Status:</span>
+                <select
+                  value={securityFilterStatus}
+                  onChange={(e) => setSecurityFilterStatus(e.target.value)}
+                  className="bg-[#1c1611] border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-200 focus:outline-none focus:border-[#d4af37]"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="SUCCESS">SUCCESS</option>
+                  <option value="WARNING">WARNING</option>
+                  <option value="REVOKED">REVOKED</option>
+                  <option value="FAILED">FAILED</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Table of Security Logs */}
+            <div className="bg-[#14100c] border border-stone-800 rounded-2xl overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono border-collapse">
+                  <thead>
+                    <tr className="bg-[#1c1611] text-[#d4af37] border-b border-stone-800 uppercase text-[10px] tracking-wider">
+                      <th className="p-4">Log ID & Timestamp</th>
+                      <th className="p-4">Event Type</th>
+                      <th className="p-4">Action</th>
+                      <th className="p-4">User & IP</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-900 text-stone-300">
+                    {securityLogs
+                      .filter((log) => {
+                        const matchesSearch =
+                          log.eventType.toLowerCase().includes(securitySearch.toLowerCase()) ||
+                          log.action.toLowerCase().includes(securitySearch.toLowerCase()) ||
+                          log.details.toLowerCase().includes(securitySearch.toLowerCase()) ||
+                          log.id.toLowerCase().includes(securitySearch.toLowerCase());
+                        const matchesStatus =
+                          securityFilterStatus === 'all' || log.status === securityFilterStatus;
+                        return matchesSearch && matchesStatus;
+                      })
+                      .map((log) => (
+                        <tr key={log.id} className="hover:bg-[#1a140d]/60 transition-colors">
+                          <td className="p-4 whitespace-nowrap">
+                            <span className="text-[#d4af37] font-bold block">{log.id}</span>
+                            <span className="text-[10px] text-stone-500 block mt-0.5">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="p-4 font-bold text-stone-200 whitespace-nowrap">
+                            <span className="bg-[#1e1812] border border-[#d4af37]/20 text-[#e6c280] px-2 py-1 rounded text-[10px]">
+                              {log.eventType}
+                            </span>
+                          </td>
+                          <td className="p-4 font-semibold text-stone-100">{log.action}</td>
+                          <td className="p-4 whitespace-nowrap text-stone-400">
+                            <span className="text-stone-300 block font-medium">{log.userRole}</span>
+                            <span className="text-[10px] text-stone-500 block">{log.ipAddress}</span>
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                log.status === 'SUCCESS'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                  : log.status === 'REVOKED'
+                                  ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                                  : log.status === 'WARNING'
+                                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                  : 'bg-stone-500/15 text-stone-400 border border-stone-500/30'
+                              }`}
+                            >
+                              {log.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-stone-400 max-w-xs truncate">{log.details}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </motion.div>
         )}
 

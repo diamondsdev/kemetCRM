@@ -59,6 +59,17 @@ export interface Review {
   date: string;
 }
 
+export interface SecurityAuditLog {
+  id: string;
+  timestamp: string;
+  eventType: string;
+  action: string;
+  userRole: string;
+  ipAddress: string;
+  status: 'SUCCESS' | 'WARNING' | 'REVOKED' | 'FAILED';
+  details: string;
+}
+
 export interface HieroglyphChar {
   char: string;
   symbolName: string;
