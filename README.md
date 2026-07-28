@@ -38,14 +38,23 @@ Designed to mimic a royal treasury and scribe’s papyrus scroll, Kemet Tours is
 *   Triggers the **Sacred Scarab Celebration**—interactive, crawling golden scarabs running across the user's viewport upon successful reservations.
 *   Embeds custom generated **QR Codes** (`BookingQRCode`) containing encrypted verification tokens for high-tech check-ins.
 
-### 3. 🔐 User Account & Authentication Modal (`AuthModal`)
-*   **Royal Traveler Registry**: Dedicated registration and login modal styled in Pharaonic gold and obsidian.
-*   **Selective Registration Policy**: Browsing tours and making standard bookings does NOT require account registration. Registration is strictly required ONLY when:
-    *   Applying promo code scrolls for discounts during checkout.
-    *   Inscribing public testimonies and reviews in the Egyptology gallery.
+### 3. 🔐 User Account & Simplified Registration (`AuthModal` & `RegisterPage`)
+*   **User-Friendly Interface**: Clear, plain-language sign-up and login workflows avoiding overly complex phrasing.
+*   **Streamlined Registration Fields**: Hotel Name and Room Number have been removed from the registration form to keep account setup fast and simple (requires only Name, Email, Password, and Phone/WhatsApp).
+*   **Selective Registration Policy**: Browsing tours and making standard bookings does NOT require account registration. Registration is optional and used for unlocking 30% promo discounts, saving profile preferences, and writing reviews.
 *   Features client & server password verification, local token persistence (`kemet_user`), and custom avatar selection.
 
-### 4. 𓋹 Gemini AI Scribe & Interactive Oracle (`ScribeOracle`)
+### 4. 🍪 Cookie Consent & Privacy Manager (`CookieConsentManager`)
+*   **Plain-Language GDPR Compliance**: Interactive cookie consent banner explaining data collection in clear, easy-to-understand terms across 5 languages (English, German, Polish, Czech, and Arabic).
+*   **Customizable Privacy Categories**: Allows travelers to toggle **Essential** (always active for logins and bookings), **Analytics** (performance tracking), and **Marketing** (special deals and 30% discount codes) preferences.
+*   **Persistence & Browser Integration**: Stores consent state in `localStorage` and sets standard browser cookies (`kemet_cookie_consent`, `kemet_analytics_allowed`, `kemet_marketing_allowed`).
+*   Includes a customizable modal dialog and feedback toast notifications on save.
+
+### 5. 🔍 Centralized SEO & Dynamic Metadata Engine (`SEOMetadataManager` & `SEOHelper`)
+*   **Dynamic Head Management**: Automatically updates document titles, meta descriptions, Open Graph social share tags, Twitter Cards, and canonical URLs when switching pages or inspecting excursion packages.
+*   **Schema.org JSON-LD Integration**: Automatically injects rich structured data graphs for search engines, including `TravelAgency`, `Trip`, `FAQPage`, `TouristAttraction`, and `BreadcrumbList` schemas.
+
+### 6. 𓋹 Gemini AI Scribe & Interactive Oracle (`ScribeOracle`)
 *   **The Scribe Planner:** Connects server-side with Gemini 3.5 Flash to construct custom, bespoke travel itineraries based on interests, duration (days), intensity, and special requests. Outputs structured JSON styled as a royal greeting.
 *   **The Scribe Chat:** Converse directly in real-time with *Sennedjem, Royal Scribe of Kemet*. Sennedjem speaks in elegant Pharaonic prose and provides answers about Egyptian mythology, travel tips, and desert coordinates. Guarded by a dedicated rate-limiter (12 petitions/min).
 
@@ -228,6 +237,9 @@ Kemet Tours features comprehensive multi-lingual translations across all compone
 │       ├── ScarabCelebration.tsx         # Particle system animation spawning golden crawling beetles
 │       ├── PapyrusScrollCelebration.tsx  # Particle effect spawning drifting parchment scrolls
 │       ├── ScrollItineraryModal.tsx      # Rolling papyrus scroll modal displaying AI itineraries
+│       ├── SEOMetadataManager.tsx        # Centralized SEO meta tags & Schema.org JSON-LD generator
+│       ├── SEOHelper.tsx                 # High-level SEO wrapper component
+│       ├── CookieConsentManager.tsx      # Plain-language multi-lingual cookie banner & preferences modal
 │       ├── PromotionalBanner.tsx         # Ancient marketing alerts and discount vouchers
 │       ├── FooterNewsletter.tsx          # Newsletter collector with tier preferences
 │       └── MobileBottomNav.tsx           # Sticky responsive touch-target navigation bar
