@@ -1,5 +1,5 @@
 // Server-side helper module for Google Workspace (Sheets, Drive, Gmail)
-import fetch from 'node-fetch';
+
 
 export interface BookingData {
   id: string;
