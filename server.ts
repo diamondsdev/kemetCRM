@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { processBookingEmailsAndSheet, sendNewsletterWelcomeEmail } from "./server/googleWorkspace";
 
@@ -608,7 +607,9 @@ function sanitizeString(str: any, maxLen: number = 500): string {
 // ==========================================
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const rawPort = process.env.PORT;
+  const isNamedPipeOrSocket = Boolean(rawPort && isNaN(Number(rawPort)));
+  const PORT = isNamedPipeOrSocket ? rawPort : (Number(rawPort) || 3000);
 
   app.disable('x-powered-by');
   app.use(express.json({ limit: "15mb" }));
@@ -1854,22 +1855,40 @@ Sitemap: https://kemet-excursions.app/sitemap.xml`;
   // CLIENT ROUTING AND STATIC ASSETS
   // ==========================================
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Determine the dist directory path whether executing from root or dist/
+    const candidateDist = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'))
+      ? path.join(process.cwd(), 'dist')
+      : fs.existsSync(path.join(__dirname, 'index.html'))
+        ? __dirname
+        : path.join(__dirname, '..', 'dist');
+
+    app.use(express.static(candidateDist));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(candidateDist, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Application bundle index.html not found. Please ensure "npm run build" was run.');
+      }
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Kemet Excursions] Server running on http://0.0.0.0:${PORT}`);
-  });
+  if (isNamedPipeOrSocket) {
+    app.listen(PORT, () => {
+      console.log(`[Kemet Spirit] Server listening on socket ${PORT}`);
+    });
+  } else {
+    app.listen(Number(PORT), "0.0.0.0", () => {
+      console.log(`[Kemet Spirit] Server running on http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
 startServer().catch((err) => {
